@@ -1,7 +1,4 @@
 #include "FunctionTree.h"
-BOOLEAN BLOCK::IsLargeBlockHead() const {
-	return static_cast<BOOLEAN>((dwIndex & ENDS_UNCOND_JUMP) >> 29);
-}
 
 BOOLEAN BLOCK::isInRange(const LPBYTE& CandidateLandmarks_t) const {
 	if (!lpLandmarks->lpEnd) {
@@ -18,8 +15,8 @@ BOOLEAN BLOCK::isInRange(const LPBYTE& CandidateLandmarks_t) const {
 
 BOOLEAN BLOCK::IsInstructionHead(const LPBYTE& lpCandidate) const {
 	if (!lpLandmarks->lpEnd) return FALSE;
-	DWORD dwAccumulatedLength = 0;
-	BYTE ucInstructionIdx = 0;
+	DWORD dwAccumulatedLength = NULL;
+	BYTE ucInstructionIdx	  = NULL;
 	for (BYTE Context: ldeState->contexts_arr) {
 		if (lpLandmarks->lpRoot + dwAccumulatedLength == lpCandidate) {
 			return TRUE;
@@ -38,9 +35,9 @@ void BLOCK::Resize(const BYTE& sNewSize, const LPBYTE& lpNewEndAddress) const {
 }
 
 void BLOCK::FindNewEnd(const LPBYTE& lpInterlacingRoot) const {
-	DWORD dwAccumulatedLength = 0;
-	BYTE  ucLastInstructionLen = 0,
-	      cbNewInstructionCount = 0;
+	DWORD dwAccumulatedLength   = NULL;
+	BYTE  ucLastInstructionLen  = NULL,
+	      cbNewInstructionCount = NULL;
 	for (BYTE Context: ldeState->contexts_arr) {
 		if (const_cast<BYTE*>(lpLandmarks->lpRoot) + dwAccumulatedLength == lpInterlacingRoot) {
 			if (cbNewInstructionCount) {
@@ -58,24 +55,24 @@ BOOLEAN FUNCTION_TREE::SplitBlock(BLOCK& Block, const LPBYTE& lpSplittingAddress
 	using namespace std;
 	if (!Block.isInRange(lpSplittingAddress)) 
 		return FALSE;
-	DWORD dwAccumulatedLength			= NULL,
-		  dwNewIndex					= static_cast<DWORD>(blocksVec.size());
+	DWORD dwNewIndex = static_cast<DWORD>(blocksVec.size()),
+		  dwAccumulatedLength			= NULL;
 	BYTE  ucLastInstructionLen			= NULL,
-		  OldBlockNewInstructionCounter = NULL,
+		  i								= NULL,
 	      ucOriginalInstructionCount	= Block.ldeState->cb_count_of_instructions;
 	for (BYTE Context: Block.ldeState->contexts_arr) {
 		if (Block.lpLandmarks->lpRoot + dwAccumulatedLength == lpSplittingAddress) {
-			if (OldBlockNewInstructionCounter) {
+			if (i) {
 				blocksVec.emplace_back(make_unique<BLOCK>(lpSplittingAddress, Block.GetIndex(), dwNewIndex, Block.dwHeight + 1));
-				BLOCK& NewBlock = *blocksVec[dwNewIndex];
-				BYTE NewBlockNewInstructionCounter = NULL;
-				for (; OldBlockNewInstructionCounter + NewBlockNewInstructionCounter < ucOriginalInstructionCount; NewBlockNewInstructionCounter++) {
-					NewBlock.ldeState->contexts_arr[NewBlockNewInstructionCounter]	   = Block.ldeState->contexts_arr[NewBlockNewInstructionCounter + OldBlockNewInstructionCounter];
-					NewBlock.ldeState->prefix_count_arr[NewBlockNewInstructionCounter] = Block.ldeState->prefix_count_arr[NewBlockNewInstructionCounter + OldBlockNewInstructionCounter];
+				BLOCK& NewBlock					= *blocksVec[dwNewIndex];
+				BYTE   NewBlockInstructionCount = NULL;
+				for (; i + NewBlockInstructionCount < ucOriginalInstructionCount; NewBlockInstructionCount++) {
+					NewBlock.ldeState->contexts_arr[NewBlockInstructionCount]	   = Block.ldeState->contexts_arr[NewBlockInstructionCount + i];
+					NewBlock.ldeState->prefix_count_arr[NewBlockInstructionCount] = Block.ldeState->prefix_count_arr[NewBlockInstructionCount + i];
 				}
-				NewBlock.Resize(NewBlockNewInstructionCounter, Block.lpLandmarks->lpEnd);
+				NewBlock.Resize(NewBlockInstructionCount, Block.lpLandmarks->lpEnd);
 				TransferUniqueChildren(Block, NewBlock);
-				Block.Resize(OldBlockNewInstructionCounter, lpSplittingAddress - ucLastInstructionLen);
+				Block.Resize(i, lpSplittingAddress - ucLastInstructionLen);
 				RootsMap[const_cast<BYTE*>(NewBlock.lpLandmarks->lpRoot)] = *reinterpret_cast<BLOCK**>(&blocksVec[NewBlock.GetIndex()]);
 				EndsMap[NewBlock.lpLandmarks->lpEnd]					  = *reinterpret_cast<BLOCK**>(&blocksVec[NewBlock.GetIndex()]);
 				EndsMap[Block.lpLandmarks->lpEnd]						  = *reinterpret_cast<BLOCK**>(&blocksVec[Block.GetIndex()]);
@@ -84,9 +81,9 @@ BOOLEAN FUNCTION_TREE::SplitBlock(BLOCK& Block, const LPBYTE& lpSplittingAddress
 		}
 		ucLastInstructionLen = LDE::GetInstructionLenCtx(Context);
 		dwAccumulatedLength += ucLastInstructionLen;
-		OldBlockNewInstructionCounter++;
+		i++;
 	}
-	if (OldBlockNewInstructionCounter == ucOriginalInstructionCount) {
+	if (i == ucOriginalInstructionCount) {
 		return FALSE;
 	}
 	return TRUE;
@@ -103,109 +100,101 @@ ADD_BRANCH FUNCTION_TREE::AddBranch(const NEW_BRANCH_PREREQ& NewBranchCtx, std::
 	return added;
 }
 
-FUNCTION_TREE::ErrorCode FUNCTION_TREE::Trace() {
-	using namespace std;
-	BLOCK* rootBlock = *reinterpret_cast<BLOCK**>(&blocksVec[0]);
-	LPBYTE lpRootAddress = const_cast<LPBYTE>(blocksVec[0]->lpLandmarks->lpRoot);
-	map<LPBYTE, BLOCK*> RootsRefMap, EndsRefMap;
-	RootsRefMap[lpRootAddress] = rootBlock;
-	LPBYTE				 lpReference     = lpRoot;
+FUNCTION_TREE::ErrorCode FUNCTION_TREE::Trace() { using namespace std;
 	vector<DWORD> explorationVec(1);
+	map<LPBYTE, BLOCK*> RootsRefMap,
+						EndsRefMap;
+	LPBYTE				lpReference = lpRoot;
+	RootsRefMap[const_cast<LPBYTE>(blocksVec[0]->lpLandmarks->lpRoot)] = *reinterpret_cast<BLOCK**>(&blocksVec[0]);
+
 	while (!explorationVec.empty()) {
-		DWORD		  dwCurrIdx	   =  explorationVec[explorationVec.size() - 1],
-					  dwVecSize	   =  static_cast<DWORD>(blocksVec.size());
-		BLOCK&		  currBranch   =  *blocksVec[dwCurrIdx];
+		DWORD		  dwCurrIdx	     =  explorationVec[explorationVec.size() - 1],
+					  dwVecSize	     =  static_cast<DWORD>(blocksVec.size());
+		BLOCK&		  CurrentBlock_t = *blocksVec[dwCurrIdx];
 		if (!dwVecSize) {
 			return failed;
 		}
-		if (currBranch.lpLandmarks->lpEnd) {
+		if (CurrentBlock_t.lpLandmarks->lpEnd) {
 			explorationVec.pop_back();
 			continue;
 		}
-		IS_NEW_BRANCH trace_result =  currBranch.Trace(newFunctionsVec);
-		if (trace_result == yes_reached_non_conditional_branch) {
-			currBranch.dwIndex |= ENDS_UNCOND_JUMP;
-		}
-		if (CheckIfAlreadyTraced(currBranch, RootsRefMap,  EndsRefMap)) {
+		IS_NEW_BRANCH trace_result = CurrentBlock_t.Trace(newFunctionsVec);
+
+		if (CheckIfAlreadyTraced(CurrentBlock_t, RootsRefMap,  EndsRefMap)) {
 			explorationVec.pop_back();
 			continue;
 		}
+
 		switch (trace_result) {
 			case yes_reached_non_conditional_branch: {
-				lpReference = currBranch.lpLandmarks->lpEnd;
+				lpReference = CurrentBlock_t.lpLandmarks->lpEnd;
 				lpReference = LDE::ResolveJump(lpReference);
-				currBranch.dwIndex |= ENDS_UNCOND_JUMP;
-				NEW_BRANCH_PREREQ NewBranchCtx(lpReference, dwVecSize, currBranch.GetIndex(), currBranch.dwHeight + 1);
 				explorationVec.pop_back();
 				if (!RootsRefMap.contains(lpReference)) {
-					if (AddBranch(NewBranchCtx, RootsRefMap, EndsRefMap) == added) {
-						RootsRefMap[lpReference] = *reinterpret_cast<BLOCK**>(&blocksVec[dwVecSize]);
-						currBranch.flowToVec.emplace_back(NewBranchCtx.dwIndex);
+					if (added == AddBranch(NEW_BRANCH_PREREQ{ lpReference, dwVecSize,
+						CurrentBlock_t.GetIndex(), CurrentBlock_t.dwHeight + 1 },  RootsRefMap, EndsRefMap)) {
+						CurrentBlock_t.flowToVec.emplace_back(dwVecSize);
 						explorationVec.push_back(dwVecSize);
+						RootsRefMap[lpReference] = *reinterpret_cast<BLOCK**>(&blocksVec[dwVecSize]);
 					}
 				}
 				break;
 			}
 			case yes_reached_conditional_branch: {
 				explorationVec.pop_back();
-				lpReference					  = currBranch.lpLandmarks->lpEnd;
-				const BYTE* lpNextInstruction = lpReference + LDE::GetInstructionLenCtx(currBranch.ldeState->contexts_arr[currBranch.ldeState->cb_count_of_instructions - 1]);
-				const BYTE* lpResolvedJump	  = LDE::ResolveJump(lpReference);
-				BOOLEAN bAdded				  = FALSE;
+				lpReference				  = CurrentBlock_t.lpLandmarks->lpEnd;
+				BYTE* lpNextInstruction   = lpReference + LDE::GetInstructionLenCtx(CurrentBlock_t.ldeState->contexts_arr[CurrentBlock_t.ldeState->cb_count_of_instructions - 1]);
+				BYTE* lpResolvedJump	  = LDE::ResolveJump(lpReference);
+				BOOLEAN bAdded			  = FALSE;
 				if (lpNextInstruction < lpResolvedJump) {
-					NEW_BRANCH_PREREQ NewBranchContinueCtx(const_cast<BYTE*>(lpNextInstruction),
-						dwVecSize | CONDITIONAL_BRANCH_MASK, currBranch.GetIndex(), currBranch.dwHeight + 1);
-					if (!RootsRefMap.contains(const_cast<BYTE*>(lpNextInstruction))) {
-						if (added == AddBranch(NewBranchContinueCtx, RootsRefMap, EndsRefMap)) {
+					if (!RootsRefMap.contains(lpNextInstruction)) {
+						if (added == AddBranch(NEW_BRANCH_PREREQ{ lpNextInstruction, dwVecSize | CONDITIONAL_BRANCH_MASK,
+							CurrentBlock_t.GetIndex(), CurrentBlock_t.dwHeight + 1 }, RootsRefMap, EndsRefMap)) {
+							CurrentBlock_t.flowToVec.emplace_back(dwVecSize);
 							explorationVec.push_back(dwVecSize);
-							RootsRefMap[const_cast<BYTE*>(lpNextInstruction)] = *reinterpret_cast<BLOCK**>(&blocksVec[dwVecSize]);
-							currBranch.flowToVec.emplace_back(NewBranchContinueCtx.dwIndex & MAX_BRANCH_INDEX);
-							bAdded = TRUE;
+							RootsRefMap[lpNextInstruction] = *reinterpret_cast<BLOCK**>(&blocksVec[dwVecSize]);
+							bAdded						   = TRUE;
 						}
 					} else {
-						RootsRefMap.at(const_cast<BYTE*>(lpNextInstruction))->flowFromVec.emplace_back(currBranch.GetIndex());
+						RootsRefMap.at(lpNextInstruction)->flowFromVec.emplace_back(CurrentBlock_t.GetIndex());
 					}
-					if (!RootsRefMap.contains(const_cast<BYTE*>(lpResolvedJump))) {
-						if (added == AddBranch(NEW_BRANCH_PREREQ(const_cast<BYTE*>(lpResolvedJump),
-							bAdded + dwVecSize | CONDITIONAL_BRANCH_MASK | C_JUMP_TAKEN_MASK, currBranch.GetIndex(), currBranch.dwHeight + 1),
-							RootsRefMap,  EndsRefMap)) {
+					if (!RootsRefMap.contains(lpResolvedJump)) {
+						if (added == AddBranch(NEW_BRANCH_PREREQ{ lpResolvedJump, bAdded + (dwVecSize | CONDITIONAL_BRANCH_MASK | C_JUMP_TAKEN_MASK),
+							CurrentBlock_t.GetIndex(), CurrentBlock_t.dwHeight + 1 }, RootsRefMap,  EndsRefMap)) {
+							CurrentBlock_t.flowToVec.emplace_back(dwVecSize + bAdded);
 							explorationVec.push_back(dwVecSize + bAdded);
-							RootsRefMap[const_cast<BYTE*>(lpResolvedJump)] = *reinterpret_cast<BLOCK**>(&blocksVec[dwVecSize + bAdded]);
-							currBranch.flowToVec.emplace_back(NewBranchContinueCtx.dwIndex + bAdded & MAX_BRANCH_INDEX);
+							RootsRefMap[lpResolvedJump] = *reinterpret_cast<BLOCK**>(&blocksVec[dwVecSize + bAdded]);
 						}
-					}
-					else {
-						RootsRefMap.at(const_cast<BYTE*>(lpResolvedJump))->flowFromVec.emplace_back(currBranch.GetIndex());
+					} else {
+						RootsRefMap.at(lpResolvedJump)->flowFromVec.emplace_back(CurrentBlock_t.GetIndex());
 					}
 				} else {
-					if (!RootsRefMap.contains(const_cast<BYTE*>(lpResolvedJump))) {
-						NEW_BRANCH_PREREQ NewBranchJumpCtx(const_cast<BYTE*>(lpResolvedJump),
-							dwVecSize | CONDITIONAL_BRANCH_MASK, currBranch.GetIndex(), currBranch.dwHeight + 1);
-						if (added == AddBranch(NewBranchJumpCtx, RootsRefMap, EndsRefMap)) {
-							RootsRefMap[const_cast<BYTE*>(lpResolvedJump)] = *reinterpret_cast<BLOCK**>(&blocksVec[dwVecSize]);
+					if (!RootsRefMap.contains(lpResolvedJump)) {
+						if (added == AddBranch(NEW_BRANCH_PREREQ{ lpResolvedJump, dwVecSize | CONDITIONAL_BRANCH_MASK,
+							CurrentBlock_t.GetIndex(), CurrentBlock_t.dwHeight + 1 }, RootsRefMap, EndsRefMap)) {
+							CurrentBlock_t.flowToVec.emplace_back(dwVecSize);
 							explorationVec.push_back(dwVecSize);
-							currBranch.flowToVec.emplace_back(NewBranchJumpCtx.dwIndex & MAX_BRANCH_INDEX);
-							bAdded = TRUE;
+							RootsRefMap[lpResolvedJump] = *reinterpret_cast<BLOCK**>(&blocksVec[dwVecSize]);
+							bAdded						= TRUE;
 						}
 					} else {
-						RootsRefMap.at(const_cast<BYTE*>(lpResolvedJump))->flowFromVec.emplace_back(currBranch.GetIndex());
+						RootsRefMap.at(lpResolvedJump)->flowFromVec.emplace_back(CurrentBlock_t.GetIndex());
 					}
-					if (!RootsRefMap.contains(const_cast<BYTE*>(lpNextInstruction))) {
-						if (added == AddBranch(NEW_BRANCH_PREREQ(const_cast<BYTE*>(lpNextInstruction),
-							bAdded + (dwVecSize | CONDITIONAL_BRANCH_MASK | C_JUMP_TAKEN_MASK), currBranch.GetIndex(), currBranch.dwHeight + 1), 
-							RootsRefMap, EndsRefMap)) {
-							RootsRefMap[const_cast<BYTE*>(lpNextInstruction)] = *reinterpret_cast<BLOCK**>(&blocksVec[dwVecSize + bAdded]);
+					if (!RootsRefMap.contains(lpNextInstruction)) {
+						if (added == AddBranch(NEW_BRANCH_PREREQ{lpNextInstruction, bAdded + (dwVecSize | CONDITIONAL_BRANCH_MASK | C_JUMP_TAKEN_MASK), 
+							CurrentBlock_t.GetIndex(), CurrentBlock_t.dwHeight + 1 },RootsRefMap, EndsRefMap)) {
+							RootsRefMap[lpNextInstruction] = *reinterpret_cast<BLOCK**>(&blocksVec[dwVecSize + bAdded]);
 							explorationVec.push_back(dwVecSize + 1);
 						}
 					} else {
-						RootsRefMap.at(const_cast<BYTE*>(lpNextInstruction))->flowFromVec.emplace_back(currBranch.GetIndex());
+						RootsRefMap.at(lpNextInstruction)->flowFromVec.emplace_back(CurrentBlock_t.GetIndex());
 					}
 				}
 				break;
 			}
 			case no_reached_ret: {
 				explorationVec.pop_back();
-				vLeafs.push_back(currBranch.GetIndex());
+				vLeafs.push_back(CurrentBlock_t.GetIndex());
 				break;
 			}
 			default: {

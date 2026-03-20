@@ -104,8 +104,11 @@ struct FUNCTION_TREE {
 	std::vector<DWORD>vLeafs;
 	DWORD dwNewFunctionsCount;
 
-	FUNCTION_TREE(const LPBYTE lpFunctionStartingAddress)
-	: blocksVec(0), newFunctionsVec(NEW_FUNCTIONS_BASE_SIZE), lpRoot(lpFunctionStartingAddress), vLeafs(0) {
+	FUNCTION_TREE(const LPBYTE lpFunctionStartingAddress):
+	blocksVec(0),
+	newFunctionsVec(NEW_FUNCTIONS_BASE_SIZE),
+	lpRoot(lpFunctionStartingAddress),
+	vLeafs(0) {
 		using namespace std;
 		blocksVec.emplace_back(make_unique<BLOCK>(lpFunctionStartingAddress, 0xFFFFFFFF, 0, 0));
 		dwNewFunctionsCount = NULL;
@@ -117,13 +120,14 @@ struct FUNCTION_TREE {
 
 	inline static BOOLEAN DidJumpForward(const LPBYTE& lpJumpRoot, const LPBYTE& lpContinueRoot);
 
-	BOOLEAN SplitBlock(BLOCK& Block, const LPBYTE& lpSplittingAddress, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
+	inline BOOLEAN SplitBlock(BLOCK& Block, const LPBYTE& lpSplittingAddress, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
 
 	ADD_BRANCH AddBranch(const NEW_BRANCH_PREREQ& NewBranchCtx, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
 
 	void TransferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewParentBlock) const;
 
-	DWORD CheckIfAlreadyTraced(BLOCK& CandidateBlock, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
+	inline DWORD CheckIfAlreadyTraced(BLOCK& CandidateBlock, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
+
 	void Print() {
 		using namespace std;
 		for (unique_ptr<BLOCK>& block: blocksVec) {
