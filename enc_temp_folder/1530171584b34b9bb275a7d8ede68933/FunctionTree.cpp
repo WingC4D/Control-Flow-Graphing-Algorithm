@@ -141,6 +141,7 @@ FUNCTION_TREE::ErrorCode FUNCTION_TREE::Trace() { using namespace std;
 					RootsRefMap.at(lpReference)->flowFromVec.emplace_back(CurrentBlock_t.getIndex());
 				}
 				break;
+				
 			}
 			case yes_reached_conditional_branch: {
 				explorationVec.pop_back();

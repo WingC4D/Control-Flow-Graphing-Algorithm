@@ -13,21 +13,17 @@ constexpr DWORD NEW_FUNCTIONS_BASE_SIZE = 0x00,
 			    ENDS_UNCOND_JUMP		= 0x20000000,
 				CONDITIONAL_BRANCH_MASK = 0X80000000,
 				C_JUMP_TAKEN_MASK		= 0X40000000,
-				MAX_BRANCH_INDEX		= 0X1FFFFFFF;
-enum ADD_BRANCH: BYTE {
-	added = 0,
-	split = 1,
-	was_traced = 2
-};
-struct BLOCK_LANDMARKS;
+				MAX_BRANCH_INDEX		= 0X1FFFFFFF,
+				INVALID_BLOCK_INDEX		= 0xFFFFFFFF;
+
 struct NEW_BRANCH_PREREQ {
-	const LPBYTE& lpRoot;
-	const DWORD&  dwIndex,
+	LPBYTE  lpRoot;
+	DWORD  dwIndex,
 				  dwParentIdx,
 				  dwHeight;
 
 	NEW_BRANCH_PREREQ(const LPBYTE& lpCandidate, const DWORD& dwNewBranchIndex, const DWORD& dwParentBranchIndex, const DWORD& dwNewBranchHeight):
-	lpRoot(lpCandidate),
+	lpRoot(const_cast<BYTE*>(lpCandidate)),
 	dwIndex(dwNewBranchIndex),
 	dwParentIdx(dwParentBranchIndex),
 	dwHeight(dwNewBranchHeight) {
@@ -43,9 +39,6 @@ struct BLOCK_LANDMARKS {
 	lpEnd(lpEndAddress){
 	}
 
-	BOOLEAN operator < (const BLOCK_LANDMARKS& other) const {
-		return lpRoot < other.lpRoot;
-	}
 };
 
 struct BLOCK {
@@ -59,7 +52,7 @@ struct BLOCK {
 	BLOCK(const LPBYTE& lpStartAddress, const DWORD dwParentIdx, const DWORD& dwBranchIdx, const DWORD& dwBranchHeight):
 	lpLandmarks(std::make_unique<BLOCK_LANDMARKS>(lpStartAddress, nullptr)),
 	ldeState(std::make_unique<LDE_STATE>()),
-	flowFromVec(0), flowToVec(0) {
+	flowFromVec(NULL), flowToVec(NULL) {
 		dwIndex = dwBranchIdx;
 		dwHeight = dwBranchHeight;
 		if (dwParentIdx != 0xFFFFFFFF) 
@@ -67,72 +60,69 @@ struct BLOCK {
 		
 	}
 
-	BOOLEAN operator <(const BLOCK& other) const {
-		return this->lpLandmarks < other.lpLandmarks;
-	}
-
 	IS_NEW_BRANCH Trace(std::vector<BYTE*>& vNewFunctionsVec);
 
 	IS_NEW_BRANCH TraceUntil(std::vector<BYTE*>& vNewFunctionsVec,  const LPBYTE& lpUntilAddress);
 
-	void Print() const; 
+	void print() const; 
 
-	void LogIndex() const;
-
-	inline BOOLEAN IsLargeBlockHead() const;
+	void logIndex() const;
 
 	inline BOOLEAN isInRange(const LPBYTE& CandidateLandmarks_t) const;
 
-	BOOLEAN IsInstructionHead(const LPBYTE& lpCandidate) const;
+	BOOLEAN isInstructionHead(const LPBYTE& lpCandidate) const;
 
-	void FindNewEnd(const LPBYTE& lpInterlacingRoot) const;
+	void findNewEnd(const LPBYTE& lpInterlacingRoot) const;
 
-	inline DWORD GetIndex(void) const;
+	inline DWORD getIndex(void) const;
 	
-	inline void Resize(const BYTE& sNewSize, const LPBYTE& lpNewEndAddress) const;
+	inline void resize(const BYTE& sNewSize, const LPBYTE& lpNewEndAddress) const;
 };
 
+enum add_block : BYTE
+{
+	was_traced = 0,
+	added	   = 1,
+	split	   = 2
+};
 
 struct FUNCTION_TREE {
 	enum ErrorCode: BYTE {
 		success,
 		failed
 	};
+	
+
 	std::vector<std::unique_ptr<BLOCK>> blocksVec;
 	std::vector<BYTE*> newFunctionsVec;
 	const LPBYTE lpRoot;
 	std::vector<DWORD>vLeafs;
 	DWORD dwNewFunctionsCount;
 
-	FUNCTION_TREE(const LPBYTE lpFunctionStartingAddress):
+	FUNCTION_TREE(const LPBYTE& lpFunctionRoot):
 	blocksVec(0),
 	newFunctionsVec(NEW_FUNCTIONS_BASE_SIZE),
-	lpRoot(lpFunctionStartingAddress),
-	vLeafs(0) {
+	lpRoot(lpFunctionRoot),
+	vLeafs(NULL) {
 		using namespace std;
-		blocksVec.emplace_back(make_unique<BLOCK>(lpFunctionStartingAddress, 0xFFFFFFFF, 0, 0));
+		blocksVec.insert(blocksVec.begin(),  make_unique<BLOCK>(lpFunctionRoot, 0xFFFFFFFF, NULL, NULL));
 		dwNewFunctionsCount = NULL;
 	}
 
 	ErrorCode Trace();
 
-	std::vector<DWORD> GetFullParentBlock(DWORD dwBlockIdx);
+	inline BOOLEAN splitBlock(BLOCK& Block, const LPBYTE& lpSplittingAddress, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
 
-	inline static BOOLEAN DidJumpForward(const LPBYTE& lpJumpRoot, const LPBYTE& lpContinueRoot);
-
-	inline BOOLEAN SplitBlock(BLOCK& Block, const LPBYTE& lpSplittingAddress, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
-
-	ADD_BRANCH AddBranch(const NEW_BRANCH_PREREQ& NewBranchCtx, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
+	add_block addBlock(const NEW_BRANCH_PREREQ& NewBranchCtx, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
 
 	void TransferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewParentBlock) const;
 
-	inline DWORD CheckIfAlreadyTraced(BLOCK& CandidateBlock, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
+	inline DWORD checkIfTraced(BLOCK& CandidateBlock, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
 
-	void Print() {
-		using namespace std;
+	void Print() { using namespace std;
 		for (unique_ptr<BLOCK>& block: blocksVec) {
-			block->LogIndex();
-			block->Print();
+			block->logIndex();
+			block->print();
 			cout << '\n';
 		}
 	}
