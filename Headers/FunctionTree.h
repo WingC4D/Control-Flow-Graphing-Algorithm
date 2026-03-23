@@ -117,7 +117,7 @@ struct FUNCTION_TREE {
 
 	void TransferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewParentBlock) const;
 
-	inline DWORD checkIfTraced(BLOCK& CandidateBlock, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
+	inline DWORD checkIfTraced(BLOCK& CandidateBlock, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap) const;
 
 	void Print() { using namespace std;
 		for (unique_ptr<BLOCK>& block: blocksVec) {

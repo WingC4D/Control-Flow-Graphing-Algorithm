@@ -396,7 +396,7 @@ void LDE::set_curr_opcode_len(_In_ BYTE cbOpcodeLength, _Inout_ STATE& lde_state
 		lde_state.ecStatus = opcode_overflow;
 	}
 }
-
+/*
 template<typename STATE>
 BYTE LDE::MapInstructionLen(_In_ const LPVOID& lpCodeBuffer, _Inout_ STATE& state) {using namespace std;
 	if (!lpCodeBuffer) {
@@ -506,7 +506,7 @@ BYTE LDE::MapInstructionLen(_In_ const LPVOID& lpCodeBuffer, _Inout_ STATE& stat
 	}
 	return GetInstructionLenCtx(state.curr_instruction_ctx);
 }
-
+*/
 template<typename STATE>
 BYTE LDE::analyse_group3_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ STATE& state) {
 	if (!*lpCandidate) {
@@ -807,12 +807,6 @@ void LDE::reset_hooking_contexts(_Inout_ LDE_HOOKING_STATE& state) {
 
 }
 
-template<typename STATE>
-void LDE::prepareForNextStep(STATE& state) {
-	state.contexts_arr[state.cb_count_of_instructions] = state.curr_instruction_ctx;
-	state.curr_instruction_ctx	    = NULL;
-	state.cb_count_of_instructions += 1;
-}
 
 IS_NEW_BRANCH LDE::check_for_new_branch(LDE_STATE& state, const LPBYTE& lpReference) {
 	if (!lpReference) {
