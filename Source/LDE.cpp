@@ -63,34 +63,6 @@ LPBYTE LDE::ResolveJump(_In_ const LPBYTE& lpSartAddress) {
 	return static_cast<BYTE*>(lpResult);
 }
 
-BOOLEAN LDE::cleanup_inner_branches(LDE_STATE& state, BLOCK& root_branch_ctx) {
-		  BYTE   cb_count_of_cleaned_indexes  = NULL;
-	const LPBYTE lpReference				   = const_cast<LPBYTE>(root_branch_ctx.lpLandmarks->lpRoot);
-
-		switch (state.prefixCountArray[cb_count_of_cleaned_indexes] & (CONDITIONALS_MASK | DISPOSITIONS_MASK)) {
-			case NULL: {
-				break;
-			}
-			case CONDITIONALS_MASK: {
-				BLOCK branch(lpReference, 0, 0,0);
-				break;
-			}
-			case IMM16_MASK: { //TODO: Complete Word Resolutions If Needed.
-				MapInstructionLen(const_cast<BYTE*>(root_branch_ctx.lpLandmarks->lpRoot), state);
-				logInstructionAndAddress(static_cast<BYTE*>(root_branch_ctx.lpLandmarks->lpEnd), state);
-				prepareForNextStep(state);//TODO: Find A Non Templated Place To Invoke This Function In LDE.cpp
-				break;
-			}
-
-			case IMM32_MASK: {
-				
-				break;
-			}
-			default: { return wrong_input; }
-		}
-		return TRUE;
-}
-
 BYTE LDE::get_first_valid_instructions_size_hook(_Inout_ LPVOID *lpCodeBuffer, _Out_ LDE_HOOKING_STATE& state) {
 	if (!lpCodeBuffer) {
 		state.ecStatus = no_input;
@@ -281,23 +253,20 @@ void LDE::log_2(const BYTE& cbInstructionCounter, _In_ STATE& lde_state) { using
 
 template<typename STATE>
 void LDE::logInstructionAndAddress(_In_ const LPBYTE& lpReferenceAddress, _In_ const STATE& state) {
-	using namespace std;
 	LPBYTE lpReferenceForPrint = lpReferenceAddress;
 	std::cout << std::format("#{:2d} @{:P} ",state.instructionCount, reinterpret_cast<LPVOID>(lpReferenceForPrint));
 	BYTE cbInstructionLen = GetInstructionLenCtx(state.curr_instruction_ctx);
 	for (BYTE i = NULL; i < cbInstructionLen; i++) {
-		cout << format("{:#04X} ", static_cast<BYTE>(*(lpReferenceForPrint + i)));
+		std::cout << std::format("{:#04X} ", static_cast<BYTE>(*(lpReferenceForPrint + i)));
 	}
-	cout << "\n";
+	std::cout << "\n";
 }
 
-
-
-void LDE::logInstructionAndAddressCtx(_In_ const LPBYTE& lpReferenceAddress, _In_ const BYTE& state, const BYTE& cbInstructionIndex) {
+void LDE::logInstructionAndAddressCtx(_In_ const LPBYTE& lpReferenceAddress, _In_ const BYTE& CandidateContext, const BYTE& cbInstructionIndex) {
 	using namespace std;
 	LPVOID lpReferenceForPrint = lpReferenceAddress;
 	cout << format("#{:3d} @{:P} ", cbInstructionIndex, lpReferenceForPrint);
-	BYTE cbInstructionLen = GetInstructionLenCtx(state);
+	BYTE cbInstructionLen = GetInstructionLenCtx(CandidateContext);
 	for (BYTE i = NULL; i < cbInstructionLen; i++) {
 		cout << format("{:#04X} ", *(static_cast<BYTE*>(lpReferenceForPrint) + i));
 	}
@@ -329,9 +298,9 @@ BOOLEAN LDE::find_n_fix_relocation(_Inout_ LPBYTE lpGateWayTrampoline, _In_ LPVO
 	return TRUE;
 }
 
-template<typename STATE>
-BOOLEAN LDE::is_curr_ctx_bREX_w(_In_ const STATE& state) {
-	return (state.curr_instruction_ctx & REX_MASK) >> 6;
+
+BOOLEAN LDE::isRexCtx(_In_ const BYTE& CandidateContext) {
+	return (CandidateContext & REX_MASK) >> 6;
 }
 
 template<typename STATE>
@@ -373,13 +342,6 @@ BYTE LDE::get_index_prefix_count(const BYTE ucIndex, STATE& state) {
 }
 
 template<typename STATE>
-BYTE LDE::getCurrentPrefixCount(STATE& state) {
-	return state.prefixCountArray[state.instructionCount] & 0x0F;
-}
-
-//template<typename STATE> void LDE::set_curr_inst_len(_In_ BYTE cbInstructionLength, _Inout_ STATE& state) 
-
-template<typename STATE>
 void LDE::set_curr_opcode_len(_In_ BYTE cbOpcodeLength, _Inout_ STATE& lde_state) {
 	if (cbOpcodeLength < SIZE_OF_DWORD) {
 		lde_state.curr_instruction_ctx &= 0xFC;
@@ -389,222 +351,24 @@ void LDE::set_curr_opcode_len(_In_ BYTE cbOpcodeLength, _Inout_ STATE& lde_state
 	}
 }
 
-template<typename STATE>
-BYTE LDE::analyse_group3_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ STATE& state) {
-	if (!*lpCandidate) {
-		state.ecStatus = no_input;
-		return NULL;
-	}
-	state.ecStatus = success;
-	BYTE ucReg				 = *(lpCandidate + SIZE_OF_BYTE) & REG_MASK,
-		 ucRM				 = *(lpCandidate + SIZE_OF_BYTE) & RM_MASK,
-		 ucMod				 = *(lpCandidate + SIZE_OF_BYTE) & MOD_MASK,
-		 uc_added_opcode_len = NULL,
-		 uc_added_imm_len	 = NULL;
-	switch (*lpCandidate) {
-		case 0xF6: {
-			switch(ucMod) {
-				case 0xC0: { if (0x10 > ucReg) { uc_added_imm_len++; } break; }
-				case 0x80: {
-					uc_added_imm_len ++;
-					if (ucRM == 4) {
-						increment_opcode_len(state);
-						uc_added_opcode_len += SIZE_OF_DWORD;
-					}
-					if (0x10 > ucReg) { uc_added_imm_len++; }
-					break;
-				}
-				case 0x40: {
-					uc_added_imm_len++;
-					if (ucRM == 4) {
-						increment_opcode_len(state);
-						uc_added_opcode_len++;
-					}
-					if (0x10 > ucReg) { uc_added_imm_len++; }
-					break;
-				}
-				default: {
-					if (ucRM == 4) {
-						increment_opcode_len(state);
-						uc_added_opcode_len++;
-						if (analyse_sib_base(*(lpCandidate + 2))) { uc_added_imm_len += SIZE_OF_DWORD; }
-						break;
-					}
-					if (ucRM == 5) {
-						SetCurrentContextRipRel(state.curr_instruction_ctx);
-						uc_added_opcode_len++;
-					}
-					break;
-				}
-			}
-			break;
-		}
-		case 0xF7: {
-			switch (ucMod) {
-				case 0xC0: { if (0x10 > ucReg) { uc_added_imm_len++; } break; }
-				case 0x80: {
-					uc_added_imm_len += 4;
-					if (ucRM == 4) {
-						increment_opcode_len(state);
-						uc_added_opcode_len++;
-						if (analyse_sib_base(*(lpCandidate + SIZE_OF_WORD))) { uc_added_imm_len += SIZE_OF_DWORD; }
-					}
-					if (0x10 > ucReg) { uc_added_imm_len += analyse_reg_size_0xF7(lpCandidate, state); }
-					break;
-				}
-				case 0x40: {
-					if (ucRM == 4) {
-						increment_opcode_len(state);
-						uc_added_opcode_len++;
-						break;
-					}
-					if (0x10 > ucReg) { uc_added_imm_len += analyse_reg_size_0xF7(lpCandidate, state); }
-					break;
-				}
-				default: { if (!ucReg) { uc_added_imm_len += SIZE_OF_DWORD; } break; }
-			}
-			break;
-		}
-		default: {
-			state.ecStatus = wrong_input;
-			return NULL;
-		}
-	}
-	return uc_added_opcode_len + uc_added_imm_len;
-}
-
-template<typename STATE>
-BYTE LDE::analyse_reg_size_0xF7(_In_ const LPBYTE lpCandidate, _In_ STATE& state) {
-	if (!lpCandidate) {
-		state.ecStatus = no_input;
-		return NULL;
-	}
-	state.ecStatus = success;
-	if (is_curr_instruction_shortened(getCurrentPrefixCount(state), lpCandidate)) {
-		return SIZE_OF_WORD;
-	}
-	return SIZE_OF_DWORD;
-}
-
-template<typename STATE>
-BYTE LDE::analyse_special_group(_In_ LPBYTE lpCandidate, _Inout_ STATE& state) {
-	if (!lpCandidate) {
-		state.ecStatus = no_input;
-		return NULL;
-	}
-	state.ecStatus = success;
-	switch (*lpCandidate) {
-		case 0x05:
-		case 0x07: 
-		case 0x34: 
-		case 0x35: 
-		case 0x77: 
-		case 0x31: 
-		case 0xA2: 
-		case 0x30: 
-		case 0x32: 
-		case 0x06: 
-		case 0x08: 
-		case 0x09: 
-		case 0x0B: { return NULL; }
-		case 0x3A:
-		case 0xBA: {
-			increment_opcode_len(state);
-			return SIZE_OF_WORD + analyse_mod_rm(lpCandidate + SIZE_OF_BYTE, state);
-		}
-		case 0x38: {
-			increment_opcode_len(state);
-			return SIZE_OF_BYTE + analyse_mod_rm(lpCandidate + SIZE_OF_BYTE, state);
-		}
-		default: {
-			if ((*lpCandidate & 0xF0) == 0x80) { return SIZE_OF_DWORD; }
-			if (getOpcodeLenCtx(state.curr_instruction_ctx) < 4) { increment_opcode_len(state); }
-			return SIZE_OF_BYTE + analyse_mod_rm(lpCandidate + SIZE_OF_BYTE, state);
-		}
-	}
-}
-
-template<typename STATE>
-BYTE LDE::analyse_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ STATE& state) {
-	BYTE cbRM				 = *lpCandidate & RM_MASK,
-		 cbReg				 = *lpCandidate & REG_MASK,
-	     cbMod				 = *lpCandidate & MOD_MASK,
-		 cb_added_opcode_len = NULL;
-	state.ecStatus = success;
-	if (!lpCandidate) {
-		state.ecStatus = no_input;
-		return NULL;
-	}
-	switch (cbMod) {
-		case 0xC0: {
-			break;
-		}
-		case 0x80: {
-			cb_added_opcode_len += SIZE_OF_DWORD;
-			if (cbRM == 4) {
-				cb_added_opcode_len++;
-				if (getOpcodeLenCtx(state.curr_instruction_ctx) < SIZE_OF_DWORD) {
-					increment_opcode_len(state);
-				}
-				break;
-			}
-			if (cbReg < 0x10) {
-				cb_added_opcode_len++;
-			}
-			break;
-		}
-		case 0x40: {
-			cb_added_opcode_len++;
-			if (cbRM == 4) {
-				increment_opcode_len(state);
-				cb_added_opcode_len++;
-			}
-			break;
-		}
-		default: {
-			if (cbRM == 4) {
-				cb_added_opcode_len++;
-				if (getOpcodeLenCtx(state.curr_instruction_ctx) < 4) {
-					increment_opcode_len(state);
-				}
-				if (analyse_sib_base(*(lpCandidate + SIZE_OF_BYTE))) {
-					cb_added_opcode_len += SIZE_OF_DWORD;
-				}
-				break;
-			}
-			if (cbRM == 5) {
-				SetCurrentContextRipRel(state.curr_instruction_ctx);
-				cb_added_opcode_len += SIZE_OF_DWORD;
-				break;
-			}
-			break;
-		}
-	}
-	return cb_added_opcode_len;
-}
-
-template<typename STATE>
-void LDE::increment_inst_len(_Inout_ STATE& state) {
-	if ((state.curr_instruction_ctx & 0x3C) < 0x3C) {
-		BYTE cb_new_inst_len = static_cast<BYTE>((GetInstructionLenCtx(state.curr_instruction_ctx) + 1) << 2);
-		state.curr_instruction_ctx &= 0xC3;
-		state.curr_instruction_ctx |= cb_new_inst_len;
+void LDE::incrementOpcodeLenCtx(BYTE& CandidateContext, lde_error_codes& StatusCode) {
+	if ((CandidateContext & 0x03) < 3) {
+		BYTE cb_new_opcode_len = (CandidateContext & 0x03) + 1;
+		CandidateContext &= 0xFC;
+		CandidateContext |= cb_new_opcode_len;
 	}
 	else {
-		state.ecStatus = instruction_overflow;
+		StatusCode = opcode_overflow;
 	}
 }
 
-template<typename STATE>
-void LDE::increment_opcode_len(STATE&state) {
-	if ((state.curr_instruction_ctx & 0x03) < 3) {
-		BYTE cb_new_opcode_len = (state.curr_instruction_ctx & 0x03) + 1;
-		state.curr_instruction_ctx &= 0xFC;
-		state.curr_instruction_ctx |= cb_new_opcode_len;
-	} else {
-		state.ecStatus = opcode_overflow;
+void LDE::set_curr_inst_len(_In_ BYTE cbInstructionLength, _Inout_ BYTE& CandidateContext) {
+	if (cbInstructionLength > MAX_INSTRUCTION_SIZE) {
+		std::cout << std::format("[!] Error @ LDE::set_curr_inst_len, Value is greater than 0x0F!\n[i] Received instruction length: {:#X}\n", static_cast<int>(cbInstructionLength));
+		return;
 	}
-	return;
+	CandidateContext &= 0xC3;
+	CandidateContext |= cbInstructionLength << 2;
 }
 
 BOOLEAN LDE::analyse_sib_base(_In_ BYTE cbCandidate) {
@@ -634,7 +398,7 @@ WORD LDE::analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE&
 				case 0x07: { return sys_ret; }
 				case 0x34: { return sys_enter; }
 				case 0x35: { return sys_exit; }
-				default: {
+				default:   {
 					if ((*(lpCandidate_addr + 1) & 0xF0) == 0x80) {
 						SetCurrentContextRipRel(ucInstructionContext_ref);
 						return conditional | jump;
@@ -646,19 +410,18 @@ WORD LDE::analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE&
 		}
 		case 0xFF: {
 			switch ((*(lpCandidate_addr + 1) & REG_MASK) >> 3) {
-				case 0: { return indirect_inc; }
-				case 1: { return indirect_dec; }
-				case 2: { return indirect_call; }
-				case 3: { return indirect_far_call; }
-				case 4: { return indirect_jump; }
-				case 5: { return indirect_far_jump; }
-				case 6: { return indirect_push; }
+				case 0:  { return indirect_inc; }
+				case 1:  { return indirect_dec; }
+				case 2:  { return indirect_call; }
+				case 3:  { return indirect_far_call; }
+				case 4:  { return indirect_jump; }
+				case 5:  { return indirect_far_jump; }
+				case 6:  { return indirect_push; }
 				default: { return unknown; }
 			}
 		}
 		default: {
 			if ((*lpCandidate_addr & 0xF0) == 0x70 || (*lpCandidate_addr & 0xFC) == 0xE0) {
-
 				return conditional | _short | jump;
 			}
 			return unknown;
