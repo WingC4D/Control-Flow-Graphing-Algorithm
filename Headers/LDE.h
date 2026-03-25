@@ -69,26 +69,26 @@ struct LDE_HOOKING_STATE {
 	LPVOID			lpFuncAddr;
 	lde_error_codes ecStatus;
 	BYTE			curr_instruction_ctx,
-					cb_count_of_instructions,
+					instructionCount,
 					cb_count_of_rip_indexes,
-					contexts_arr[RELATIVE_TRAMPOLINE_SIZE],
-					prefix_count_arr[RELATIVE_TRAMPOLINE_SIZE],
+					contextsArray[RELATIVE_TRAMPOLINE_SIZE],
+					prefixCountArray[RELATIVE_TRAMPOLINE_SIZE],
 					rip_relative_indexes[RELATIVE_TRAMPOLINE_SIZE];
 };
 
 struct LDE_STATE {
 	lde_error_codes ecStatus;
 	BYTE			curr_instruction_ctx,
-					cb_count_of_instructions,
+					instructionCount,
 					cb_count_of_branches;
-	std::deque<BYTE>contexts_arr,
-					prefix_count_arr;
+	std::deque<BYTE>contextsArray,
+					prefixCountArray;
 	LDE_STATE():
-	contexts_arr(ROOT_BRANCH_INSTRUCTION_COUNT),
-	prefix_count_arr(ROOT_BRANCH_INSTRUCTION_COUNT) {
+	contextsArray(ROOT_BRANCH_INSTRUCTION_COUNT),
+	prefixCountArray(ROOT_BRANCH_INSTRUCTION_COUNT) {
 		ecStatus				 = success;
 		curr_instruction_ctx     = NULL;
-		cb_count_of_instructions = NULL;
+		instructionCount = NULL;
 		cb_count_of_branches	 = NULL;
 	}
 };
@@ -97,10 +97,10 @@ struct LDE_JUMP_RESOLUTION_STATE {
 	LPVOID			lpFuncAddr;
 	lde_error_codes ecStatus;
 	BYTE			curr_instruction_ctx,
-					cb_count_of_instructions,
+					instructionCount,
 					cb_count_of_rip_indexes,
-					contexts_arr[1],
-					prefix_count_arr[1],
+					contextsArray[1],
+					prefixCountArray[1],
 					rip_relative_indexes[1];
 	};
 
@@ -130,7 +130,7 @@ public:
 
 	static LPBYTE ResolveJump(_In_ const LPBYTE& lpSartAddress);
 
-	static IS_NEW_BRANCH check_for_new_branch(LDE_STATE& state, const LPBYTE& lpReference);
+	static IS_NEW_BRANCH checkForNewBlock(LDE_STATE& state, const LPBYTE& lpReference);
 
 	inline static BYTE GetInstructionLenCtx(_In_ const BYTE& ucCurrentInstruction_ctx);
 
@@ -150,42 +150,42 @@ public:
 		switch (results[*lpReferenceBuffer]) {
 		case none: {
 			if (*lpReferenceBuffer == 0xC3 || *lpReferenceBuffer == 0xC2) { state.ecStatus = reached_end_of_function; }
-			set_curr_inst_len(get_current_prefix_count(state) + get_curr_opcode_len(state.curr_instruction_ctx), state);
+			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx), state);
 			break;
 		}
 		case has_mod_rm: {
 			increment_opcode_len(state);
-			set_curr_inst_len(get_current_prefix_count(state) + get_curr_opcode_len(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state);
+			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state);
 			break;
 		}
 		case has_mod_rm | prefix: {
 			increment_opcode_len(state);
-			set_curr_inst_len(get_current_prefix_count(state) + get_curr_opcode_len(state.curr_instruction_ctx) + analyse_special_group(lpReferenceBuffer + 1, state), state);
+			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_special_group(lpReferenceBuffer + 1, state), state);
 			break;
 		}
 		case has_mod_rm | special: {
 			increment_opcode_len(state);
-			set_curr_inst_len(get_current_prefix_count(state) + get_curr_opcode_len(state.curr_instruction_ctx) + analyse_group3_mod_rm(lpReferenceBuffer, state), state);
+			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_group3_mod_rm(lpReferenceBuffer, state), state);
 			break;
 		}
 		case has_mod_rm | imm_one_byte: {
 			increment_opcode_len(state);
-			set_curr_inst_len(get_current_prefix_count(state) + SIZE_OF_BYTE + get_curr_opcode_len(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state);
+			set_curr_inst_len(getCurrentPrefixCount(state) + SIZE_OF_BYTE + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state);
 			break;
 		}
 		case has_mod_rm | imm_two_bytes: {
 			increment_opcode_len(state);
-			set_curr_inst_len(get_current_prefix_count(state) + SIZE_OF_WORD + get_curr_opcode_len(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state);
+			set_curr_inst_len(getCurrentPrefixCount(state) + SIZE_OF_WORD + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state);
 			break;
 		}
 		case has_mod_rm | imm_four_bytes: {
 			increment_opcode_len(state);
-			set_curr_inst_len(get_current_prefix_count(state) + SIZE_OF_DWORD + get_curr_opcode_len(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state);
+			set_curr_inst_len(getCurrentPrefixCount(state) + SIZE_OF_DWORD + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state);
 			break;
 		}
 		case has_mod_rm | imm_eight_bytes: {
 			increment_opcode_len(state);
-			set_curr_inst_len(get_current_prefix_count(state) + SIZE_OF_QWORD + get_curr_opcode_len(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state);
+			set_curr_inst_len(getCurrentPrefixCount(state) + SIZE_OF_QWORD + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state);
 			break;
 		}
 		case has_mod_rm | imm_eight_bytes | imm_four_bytes: {
@@ -193,43 +193,43 @@ public:
 			break;
 		}
 		case imm_one_byte: {
-			set_curr_inst_len(get_current_prefix_count(state) + get_curr_opcode_len(state.curr_instruction_ctx) + SIZE_OF_BYTE, state);
+			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + SIZE_OF_BYTE, state);
 			break;
 		}
 		case imm_two_bytes: {
-			set_curr_inst_len(get_current_prefix_count(state) + get_curr_opcode_len(state.curr_instruction_ctx) + SIZE_OF_WORD, state);
+			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + SIZE_OF_WORD, state);
 			break;
 		}
 		case imm_four_bytes: {
-			set_curr_inst_len(get_current_prefix_count(state) + get_curr_opcode_len(state.curr_instruction_ctx) + SIZE_OF_DWORD, state);
+			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + SIZE_OF_DWORD, state);
 			break;
 		}
 		case imm_eight_bytes: {
-			set_curr_inst_len(get_current_prefix_count(state) + get_curr_opcode_len(state.curr_instruction_ctx) + SIZE_OF_QWORD, state);
+			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + SIZE_OF_QWORD, state);
 			break;
 		}
 		case imm_four_bytes | imm_eight_bytes: {
 			if (*lpReferenceBuffer == 0xE8 || *lpReferenceBuffer == 0xE9) {
 				SetCurrentContextRipRel(state.curr_instruction_ctx);
-				if (!is_curr_instruction_shortened(get_current_prefix_count(state), lpReferenceBuffer)) {
-					set_curr_inst_len(get_current_prefix_count(state) + get_curr_opcode_len(state.curr_instruction_ctx) + SIZE_OF_DWORD, state);
+				if (!is_curr_instruction_shortened(getCurrentPrefixCount(state), lpReferenceBuffer)) {
+					set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + SIZE_OF_DWORD, state);
 				}
 				else {
-					set_curr_inst_len(get_current_prefix_count(state) + get_curr_opcode_len(state.curr_instruction_ctx) + SIZE_OF_WORD, state);
+					set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + SIZE_OF_WORD, state);
 				}
 			}
 			else if (is_curr_ctx_bREX_w(state)) {
-				if (*(lpReferenceBuffer - (get_curr_opcode_len(state.curr_instruction_ctx) - SIZE_OF_BYTE)) & 0x48) {
-					set_curr_inst_len(get_curr_opcode_len(state.curr_instruction_ctx) + get_current_prefix_count(state) + SIZE_OF_QWORD, state);
+				if (*(lpReferenceBuffer - (getOpcodeLenCtx(state.curr_instruction_ctx) - SIZE_OF_BYTE)) & 0x48) {
+					set_curr_inst_len(getOpcodeLenCtx(state.curr_instruction_ctx) + getCurrentPrefixCount(state) + SIZE_OF_QWORD, state);
 					break;
 				}
 			}
-			set_curr_inst_len(get_curr_opcode_len(state.curr_instruction_ctx) + get_current_prefix_count(state) + SIZE_OF_DWORD, state);
+			set_curr_inst_len(getOpcodeLenCtx(state.curr_instruction_ctx) + getCurrentPrefixCount(state) + SIZE_OF_DWORD, state);
 			break;
 		}
 		case prefix: {
-			state.prefix_count_arr[state.cb_count_of_instructions] += 1;
-			if (get_current_prefix_count(state) > 0x0E) {
+			state.prefixCountArray[state.instructionCount] += 1;
+			if (getCurrentPrefixCount(state) > 0x0E) {
 				state.ecStatus = prefix_overflow;
 				return NULL;
 			}
@@ -247,7 +247,7 @@ public:
 	}
 
 	template<typename STATE>
-	static BYTE get_current_prefix_count(STATE& state);
+	static BYTE getCurrentPrefixCount(STATE& state);
 
 private:
 	enum first_byte_traits: BYTE {
@@ -271,7 +271,7 @@ private:
 	template<typename STATE>
 	static BOOLEAN is_RIP_relative(const _In_ STATE& state);
 
-	inline static BYTE get_curr_opcode_len(_In_ const BYTE& ucCurrentInstruction_ctx);
+	inline static BYTE getOpcodeLenCtx(_In_ const BYTE& ucCurrentInstruction_ctx);
 
 	template<typename STATE>
 	static BYTE get_index_ctx_inst_len(_In_ BYTE cbIndex, _Inout_ const STATE& state);
@@ -292,7 +292,15 @@ private:
 	inline static void SetCurrentContextRipRel(_Inout_ BYTE& ucCurrentInstructionCtx) ;
 
 	template<typename STATE>
-	static void set_curr_inst_len(_In_ BYTE cbInstructionLength, _Inout_ STATE& state);
+	static void set_curr_inst_len(_In_ BYTE cbInstructionLength, _Inout_ STATE& state) {
+		using namespace std;
+		if (cbInstructionLength > MAX_INSTRUCTION_SIZE) {
+			cout << format("[!] Error @ LDE::set_curr_inst_len, Value is greater than 0x0F!\n[i] Received instruction length: {:#X}\n", static_cast<int>(cbInstructionLength));
+			return;
+		}
+		state.curr_instruction_ctx &= 0xC3;
+		state.curr_instruction_ctx |= cbInstructionLength << 2;
+	}
 
 	template<typename STATE>
 	static void set_curr_opcode_len(_In_ BYTE cbOpcodeLength,_Inout_ STATE& state);
@@ -332,9 +340,9 @@ private:
 
 	template<typename STATE>
 	static void prepareForNextStep(STATE& state){
-		state.contexts_arr[state.cb_count_of_instructions] = state.curr_instruction_ctx;
+		state.contextsArray[state.instructionCount] = state.curr_instruction_ctx;
 		state.curr_instruction_ctx = NULL;
-		state.cb_count_of_instructions += 1;
+		state.instructionCount += 1;
 	}
 	
 

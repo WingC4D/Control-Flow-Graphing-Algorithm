@@ -60,7 +60,7 @@ struct BLOCK {
 		
 	}
 
-	IS_NEW_BRANCH Trace(std::vector<BYTE*>& vNewFunctionsVec);
+	IS_NEW_BRANCH Trace(std::vector<BYTE*>& NewFunctionsVec);
 
 	IS_NEW_BRANCH TraceUntil(std::vector<BYTE*>& vNewFunctionsVec,  const LPBYTE& lpUntilAddress);
 
@@ -118,6 +118,8 @@ struct FUNCTION_TREE {
 	void TransferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewParentBlock) const;
 
 	inline DWORD checkIfTraced(BLOCK& CandidateBlock, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap) const;
+
+	void handleConditionalJump(const LPBYTE& lpShallowAddress, const LPBYTE&);
 
 	void Print() { using namespace std;
 		for (unique_ptr<BLOCK>& block: blocksVec) {
