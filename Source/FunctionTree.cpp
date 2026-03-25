@@ -40,9 +40,9 @@ void BLOCK::findNewEnd(const LPBYTE& lpInterlacingRoot) const {
 	      cbNewInstructionCount = NULL;
 	for (BYTE Context: ldeState->contextsArray) {
 		if (const_cast<BYTE*>(lpLandmarks->lpRoot) + dwAccumulatedLength == lpInterlacingRoot) {
-			if (cbNewInstructionCount) 
+			if (cbNewInstructionCount) {
 				resize(cbNewInstructionCount, const_cast<BYTE*>(lpInterlacingRoot) - ucLastInstructionLen);
-
+			}
 			return;
 		}
 		ucLastInstructionLen = LDE::GetInstructionLenCtx(Context);
