@@ -28,7 +28,7 @@ BOOLEAN BLOCK::isInstructionHead(const LPBYTE& lpCandidate) const {
 }
 
 void BLOCK::resize(const BYTE& sNewSize, const LPBYTE& lpNewEndAddress) const {
-	lpLandmarks->lpEnd				   = lpNewEndAddress;
+	lpLandmarks->lpEnd		   = lpNewEndAddress;
 	ldeState->instructionCount = sNewSize;
 	ldeState->contextsArray.resize(sNewSize);
 	ldeState->prefixCountArray.resize(sNewSize);
