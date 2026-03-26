@@ -51,31 +51,31 @@ void BLOCK::findNewEnd(const LPBYTE& lpInterlacingRoot) const {
 	}
 }
 
-BOOLEAN FUNCTION_TREE::splitBlock(BLOCK& Block, const LPBYTE& lpSplittingAddress, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap) {
+BOOLEAN FUNCTION_TREE::splitBlock(BLOCK& SplitBlock, const LPBYTE& lpSplittingAddress, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap) {
 	using namespace std;
-	if (!Block.isInRange(lpSplittingAddress)) 
+	if (!SplitBlock.isInRange(lpSplittingAddress)) 
 		return FALSE;
 	DWORD dwNewIndex = static_cast<DWORD>(blocksVec.size()),
 		  dwAccumulatedLength			= NULL;
 	BYTE  ucLastInstructionLen			= NULL,
 		  i								= NULL,
-	      ucOriginalInstructionCount	= Block.ldeState->instructionCount;
-	for (BYTE Context: Block.ldeState->contextsArray) {
-		if (Block.lpLandmarks->lpRoot + dwAccumulatedLength == lpSplittingAddress) {
+	      ucOriginalInstructionCount	= SplitBlock.ldeState->instructionCount;
+	for (BYTE Context: SplitBlock.ldeState->contextsArray) {
+		if (SplitBlock.lpLandmarks->lpRoot + dwAccumulatedLength == lpSplittingAddress) {
 			if (i) {
-				blocksVec.emplace_back(make_unique<BLOCK>(lpSplittingAddress, Block.getIndex(), dwNewIndex, Block.dwHeight + 1));
+				blocksVec.emplace_back(make_unique<BLOCK>(lpSplittingAddress, SplitBlock.getIndex(), dwNewIndex, SplitBlock.dwHeight + 1));
 				BLOCK& NewBlock					= *blocksVec[dwNewIndex];
 				BYTE   NewBlockInstructionCount = NULL;
 				for (; i + NewBlockInstructionCount < ucOriginalInstructionCount; NewBlockInstructionCount++) {
-					NewBlock.ldeState->contextsArray[NewBlockInstructionCount]	  = Block.ldeState->contextsArray[NewBlockInstructionCount + i];
-					NewBlock.ldeState->prefixCountArray[NewBlockInstructionCount] = Block.ldeState->prefixCountArray[NewBlockInstructionCount + i];
+					NewBlock.ldeState->contextsArray[NewBlockInstructionCount]	  = SplitBlock.ldeState->contextsArray[NewBlockInstructionCount + i];
+					NewBlock.ldeState->prefixCountArray[NewBlockInstructionCount] = SplitBlock.ldeState->prefixCountArray[NewBlockInstructionCount + i];
 				}
-				NewBlock.resize(NewBlockInstructionCount, Block.lpLandmarks->lpEnd);
-				TransferUniqueChildren(Block, NewBlock);
-				Block.resize(i, lpSplittingAddress - ucLastInstructionLen);
+				NewBlock.resize(NewBlockInstructionCount, SplitBlock.lpLandmarks->lpEnd);
+				TransferUniqueChildren(SplitBlock, NewBlock);
+				SplitBlock.resize(i, lpSplittingAddress - ucLastInstructionLen);
 				RootsMap[const_cast<BYTE*>(NewBlock.lpLandmarks->lpRoot)] = blocksVec[NewBlock.getIndex()].get();
 				EndsMap[NewBlock.lpLandmarks->lpEnd]					  = blocksVec[NewBlock.getIndex()].get();
-				EndsMap[Block.lpLandmarks->lpEnd]						  = blocksVec[Block.getIndex()].get();
+				EndsMap[SplitBlock.lpLandmarks->lpEnd]					  = blocksVec[SplitBlock.getIndex()].get();
 			}
 			break;
 		}
@@ -127,14 +127,12 @@ FUNCTION_TREE::ErrorCode FUNCTION_TREE::Trace() {
 			continue; 
 
 		IS_NEW_BRANCH trace_result = CurrentBlock_t.Trace(newFunctionsVec);
-
+		FUNCTION_TREE_TRACE_CTX trace_ctx{ .rootsMap = RootsRefMap, .endsMap = EndsRefMap,  .currentBlock = CurrentBlock_t, .explorationVec = explorationVec };
 		if (checkIfTraced(CurrentBlock_t, RootsRefMap,  EndsRefMap)) 
 			continue; 
-
 		switch (trace_result) {
 			case yes_reached_non_conditional_branch: {
-				lpReference		 = CurrentBlock_t.lpLandmarks->lpEnd;
-				lpReference		 = LDE::ResolveJump(lpReference);
+				lpReference		 = LDE::ResolveJump(CurrentBlock_t.lpLandmarks->lpEnd);
 				add_block result = addBlock(NEW_BRANCH_PREREQ{ lpReference, dwVecSize,CurrentBlock_t.getIndex(), CurrentBlock_t.dwHeight + 1 }, RootsRefMap, EndsRefMap);
 				if (result == added) {
 					CurrentBlock_t.flowToVec.emplace_back(dwVecSize);
@@ -145,17 +143,10 @@ FUNCTION_TREE::ErrorCode FUNCTION_TREE::Trace() {
 				break;
 			}
 			case yes_reached_conditional_branch: {
-				lpReference					= CurrentBlock_t.lpLandmarks->lpEnd;
-				BYTE     *lpNextInstruction = lpReference + LDE::GetInstructionLenCtx(CurrentBlock_t.ldeState->contextsArray[CurrentBlock_t.ldeState->instructionCount - 1]),
-					     *lpResolvedJump	= LDE::ResolveJump(lpReference);
-				BOOLEAN   bAdded			= FALSE;
-				
-				if (lpNextInstruction < lpResolvedJump) {
-					handleConditionalJump(lpNextInstruction, lpResolvedJump, RootsRefMap, EndsRefMap, explorationVec, CurrentBlock_t);
-				}
-				else {
-					handleConditionalJump(lpResolvedJump, lpNextInstruction, RootsRefMap, EndsRefMap, explorationVec, CurrentBlock_t);
-				}
+				BYTE *lpNextInstruction = CurrentBlock_t.lpLandmarks->lpEnd + LDE::GetInstructionLenCtx(CurrentBlock_t.ldeState->contextsArray[CurrentBlock_t.ldeState->instructionCount - 1]),
+					 *lpResolvedJump	= LDE::ResolveJump(CurrentBlock_t.lpLandmarks->lpEnd);
+				lpNextInstruction < lpResolvedJump ? handleConditionalJump(lpNextInstruction, lpResolvedJump, trace_ctx)
+												   : handleConditionalJump(lpResolvedJump, lpNextInstruction, trace_ctx);
 				break;
 			}
 			case no_reached_ret: {
@@ -187,51 +178,58 @@ void BLOCK::logIndex() const {
 	}
 }
 
+void BLOCK::addResolvedCall(std::vector<LPBYTE>& NewFunctionVec, const LPBYTE& lpResolvedAddress) {
+	bool was_added = false;
+	for (LPBYTE lpStoredFunction: NewFunctionVec) {
+		if (lpStoredFunction == lpResolvedAddress) {
+			was_added = true;
+			break;
+		}
+	}
+	if (!was_added)
+		NewFunctionVec.emplace_back(lpResolvedAddress);
+}
+
+void BLOCK::handleEndOfTrace(const LPBYTE& lpCurrentAddress, LDE_STATE& state) {
+	state.contextsArray.resize(state.instructionCount);
+	state.prefixCountArray.resize(state.instructionCount);
+	ldeState		   = std::make_unique<LDE_STATE>(state);
+	lpLandmarks->lpEnd = lpCurrentAddress;
+}
+
 IS_NEW_BRANCH BLOCK::Trace(_Out_ std::vector<BYTE *>& NewFunctionsVec) {
 	LPBYTE	  lpReference = const_cast<BYTE*>(lpLandmarks->lpRoot);
 	LDE_STATE state;
 	while (state.instructionCount < ROOT_BRANCH_INSTRUCTION_COUNT) {
 		BYTE ucInstructionLen = LDE::MapInstructionLen(lpReference, state);
+		LDE::prepareForNextStep(state);
 		if (!ucInstructionLen) {
 			return algorithm_failed;
 		}
 		switch (LDE::checkForNewBlock(state, lpReference)) {
 			case yes_reached_non_conditional_branch: {
-				lpLandmarks->lpEnd = lpReference;
-				LDE::prepareForNextStep(state);
-				state.contextsArray.resize(state.instructionCount);
-				state.prefixCountArray.resize(state.instructionCount);
-				ldeState = std::make_unique<LDE_STATE>(state);
+				handleEndOfTrace(lpReference, state);
 				return yes_reached_non_conditional_branch;
 			}
 			case yes_reached_conditional_branch: {
-				lpLandmarks->lpEnd = lpReference;
-				LDE::prepareForNextStep(state);
-				state.contextsArray.resize(state.instructionCount);
-				state.prefixCountArray.resize(state.instructionCount);
-				ldeState = std::make_unique<LDE_STATE>(state);
+				handleEndOfTrace(lpReference, state);
 				return yes_reached_conditional_branch;
 			}
 			case yes_is_call: {
-				NewFunctionsVec.push_back(LDE::ResolveJump(lpReference));
+				addResolvedCall(NewFunctionsVec, LDE::ResolveJump(lpReference));
 				break;
 			}
 			case no: {
 				break;
 			}
 			case no_reached_ret: {
-				lpLandmarks->lpEnd = lpReference;
-				LDE::prepareForNextStep(state);
-				state.contextsArray.resize(state.instructionCount);
-				state.prefixCountArray.resize(state.instructionCount);
-				ldeState = std::make_unique<LDE_STATE>(state);
+				handleEndOfTrace(lpReference, state);
 				return no_reached_ret;
 			}
 			case algorithm_failed: {
 				return algorithm_failed;
 			}
 		}
-		LDE::prepareForNextStep(state);
 		lpReference += ucInstructionLen;
 	}
 	return algorithm_failed;
@@ -245,48 +243,39 @@ IS_NEW_BRANCH BLOCK::TraceUntil(_Out_ std::vector<BYTE*>& vNewFunctionsVec, cons
 	BYTE ucInstructionLen = 0;
 	while (state.instructionCount < ROOT_BRANCH_INSTRUCTION_COUNT && lpUntilAddress <= lpLandmarks->lpRoot) {
 		if (lpReference == lpUntilAddress && ucInstructionLen) {
-			lpLandmarks->lpEnd = lpReference - ucInstructionLen;
-			ldeState = make_unique<LDE_STATE>(state);
+			handleEndOfTrace(lpReference, state);
 			return no;
 		}
 		ucInstructionLen = LDE::MapInstructionLen(lpReference, state);
 		//LDE::logInstructionAndAddress(lpReference, state);
-
+		LDE::prepareForNextStep(state);
 		switch (LDE::checkForNewBlock(state, lpReference)) {
 			case yes_reached_non_conditional_branch: {
-				lpLandmarks->lpEnd = lpReference;
-				LDE::prepareForNextStep(state);
-				ldeState = make_unique<LDE_STATE>(state);
+				handleEndOfTrace(lpReference, state);
 				return yes_reached_non_conditional_branch;
 			}
 			case yes_reached_conditional_branch: {
-				lpLandmarks->lpEnd = lpReference;
-				LDE::prepareForNextStep(state);
-				ldeState = make_unique<LDE_STATE>(state);
+				handleEndOfTrace(lpReference, state);
 				return yes_reached_conditional_branch;
 			}
 			case yes_is_call: {
-				vNewFunctionsVec.push_back(LDE::ResolveJump(lpReference));
+				addResolvedCall(vNewFunctionsVec, LDE::ResolveJump(lpReference));
 				break;
 			}
 			case no: { break; }
 			case no_reached_ret: {
-				lpLandmarks->lpEnd = lpReference;
-				LDE::prepareForNextStep(state);
-				ldeState = make_unique<LDE_STATE>(state);
+				handleEndOfTrace(lpReference, state);
 				return no_reached_ret;
 			}
-
 			case algorithm_failed: { return algorithm_failed; }
 		}
-		LDE::prepareForNextStep(state);
 		lpReference += ucInstructionLen;
 	}
 	return algorithm_failed;
 }
 
 DWORD FUNCTION_TREE::checkIfTraced(BLOCK& CandidateBlock, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap) const {
-	auto prevBlock = RootsMap.upper_bound(const_cast<BYTE*>(CandidateBlock.lpLandmarks->lpRoot));
+	std::map<BYTE*, BLOCK*>::iterator prevBlock = RootsMap.upper_bound(const_cast<BYTE*>(CandidateBlock.lpLandmarks->lpRoot));
 	if (prevBlock != RootsMap.end()) {
 		BLOCK& CloseBlock = *prevBlock->second;
 		if (CandidateBlock.isInRange(const_cast<BYTE*>(CloseBlock.lpLandmarks->lpRoot)) && CandidateBlock.dwIndex != CloseBlock.dwIndex) {
@@ -315,7 +304,6 @@ void BLOCK::print(void) const {
 DWORD BLOCK::getIndex(void) const {
 	return dwIndex & MAX_BRANCH_INDEX;
 }
-
 
 void FUNCTION_TREE::TransferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewParentBlock) const {
 	if (OldParentBlock.flowToVec.empty()) {
@@ -352,32 +340,30 @@ void FUNCTION_TREE::TransferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewPare
 	}
 	if (g_state) {
 		OldParentBlock.flowToVec.clear();
-		OldParentBlock.flowToVec.push_back(NewParentBlock.getIndex());
+		OldParentBlock.flowToVec.emplace_back(NewParentBlock.getIndex());
 	}
 }
 
-void FUNCTION_TREE::handleConditionalJump(const LPBYTE& lpShallowAddress, const LPBYTE& lpDeepAddress, std::map<LPBYTE, BLOCK*>&RootsMap, std::map<LPBYTE, BLOCK*>&EndsMap, std::vector<DWORD>&explorationVec, BLOCK& CurrentBlock_t) {
-	BOOLEAN   bAdded = FALSE;
-	DWORD	  dwVecSize = static_cast<DWORD>(blocksVec.size());
-	
-	add_block  result = addBlock(NEW_BRANCH_PREREQ{ lpShallowAddress, dwVecSize | CONDITIONAL_BRANCH_MASK,CurrentBlock_t.getIndex(), CurrentBlock_t.dwHeight + 1 },
-		RootsMap, EndsMap);
+void FUNCTION_TREE::handleConditionalJump(const LPBYTE& lpShallowAddress, const LPBYTE& lpDeepAddress, const FUNCTION_TREE_TRACE_CTX& TraceContext) {
+	BOOLEAN    bAdded    = FALSE;
+	DWORD	   dwVecSize = static_cast<DWORD>(blocksVec.size());
+	add_block  result    = addBlock(NEW_BRANCH_PREREQ{ lpShallowAddress, dwVecSize | CONDITIONAL_BRANCH_MASK,TraceContext.currentBlock.getIndex(), TraceContext.currentBlock.dwHeight + 1 }, TraceContext.rootsMap, TraceContext.endsMap);
 	if (result == added) {
-		CurrentBlock_t.flowToVec.emplace_back(dwVecSize);
-		explorationVec.push_back(dwVecSize);
-		RootsMap[lpShallowAddress] = blocksVec[dwVecSize].get();
+		TraceContext.currentBlock.flowToVec.emplace_back(dwVecSize);
+		TraceContext.explorationVec.emplace_back(dwVecSize);
+		TraceContext.rootsMap[lpShallowAddress] = blocksVec[dwVecSize].get();
 		bAdded = TRUE;
 	}
-	else if (result == was_traced) RootsMap.at(lpShallowAddress)->flowFromVec.emplace_back(CurrentBlock_t.getIndex());
+	else if (result == was_traced) 
+		TraceContext.rootsMap.at(lpShallowAddress)->flowFromVec.emplace_back(TraceContext.currentBlock.getIndex());
 
-	result = addBlock(NEW_BRANCH_PREREQ{ lpDeepAddress, bAdded + (dwVecSize | CONDITIONAL_BRANCH_MASK | C_JUMP_TAKEN_MASK),CurrentBlock_t.getIndex(), CurrentBlock_t.dwHeight + 1 },
-		RootsMap, EndsMap);
+	result = addBlock(NEW_BRANCH_PREREQ{ lpDeepAddress, bAdded + (dwVecSize | CONDITIONAL_BRANCH_MASK | C_JUMP_TAKEN_MASK),TraceContext.currentBlock.getIndex(), TraceContext.currentBlock.dwHeight + 1 }, TraceContext.rootsMap, TraceContext.endsMap);
 	if (result == added) {
-		CurrentBlock_t.flowToVec.emplace_back(dwVecSize + bAdded);
-		explorationVec.push_back(dwVecSize + bAdded);
-		RootsMap[lpDeepAddress] = blocksVec[dwVecSize + bAdded].get();
+		TraceContext.currentBlock.flowToVec.emplace_back(dwVecSize + bAdded);
+		TraceContext.explorationVec.emplace_back(dwVecSize + bAdded);
+		TraceContext.rootsMap[lpDeepAddress] = blocksVec[dwVecSize + bAdded].get();
 	}
 	else if (result == was_traced)
-		RootsMap.at(lpDeepAddress)->flowFromVec.emplace_back(CurrentBlock_t.getIndex());
+		TraceContext.rootsMap.at(lpDeepAddress)->flowFromVec.emplace_back(TraceContext.currentBlock.getIndex());
 	
 }

@@ -77,6 +77,12 @@ struct BLOCK {
 	inline DWORD getIndex(void) const;
 	
 	inline void resize(const BYTE& sNewSize, const LPBYTE& lpNewEndAddress) const;
+
+	
+
+	inline void handleEndOfTrace(const LPBYTE& lpCurrentAddress, LDE_STATE& state);
+
+	inline static void addResolvedCall(std::vector<LPBYTE>& NewFunctionVec, const LPBYTE& lpResolvedAddress);
 };
 
 enum add_block : BYTE
@@ -84,6 +90,14 @@ enum add_block : BYTE
 	was_traced = 0,
 	added	   = 1,
 	split	   = 2
+};
+
+struct FUNCTION_TREE_TRACE_CTX {
+	std::map<BYTE*, BLOCK*>& rootsMap,
+						   & endsMap;
+	BLOCK&				     currentBlock;
+	std::vector<DWORD>&		 explorationVec;
+	
 };
 
 struct FUNCTION_TREE {
@@ -111,7 +125,7 @@ struct FUNCTION_TREE {
 
 	ErrorCode Trace();
 
-	inline BOOLEAN splitBlock(BLOCK& Block, const LPBYTE& lpSplittingAddress, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
+	inline BOOLEAN splitBlock(BLOCK& SplitBlock, const LPBYTE& lpSplittingAddress, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
 
 	add_block addBlock(const NEW_BRANCH_PREREQ& NewBranchCtx, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap);
 
@@ -119,7 +133,9 @@ struct FUNCTION_TREE {
 
 	inline DWORD checkIfTraced(BLOCK& CandidateBlock, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap) const;
 
-	void handleConditionalJump(const LPBYTE& lpShallowAddress, const LPBYTE& lpDeepAddress, std::map<LPBYTE, BLOCK*>&RootsMap, std::map<LPBYTE, BLOCK*>&EndsMap, std::vector<DWORD>&explorationVec, BLOCK& CurrentBlock_t);
+	void handleConditionalJump(const LPBYTE& lpShallowAddress, const LPBYTE& lpDeepAddress, const FUNCTION_TREE_TRACE_CTX& TraceContext);
+
+	void handleJump();
 
 	void Print() { using namespace std;
 		for (unique_ptr<BLOCK>& block: blocksVec) {
