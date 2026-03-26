@@ -1,7 +1,7 @@
 #include "LDE.h"
 
 LPBYTE LDE::ResolveJump(_In_ const LPBYTE& lpSartAddress) {
-	LDE_JUMP_RESOLUTION_STATE state = { .lpFuncAddr = lpSartAddress };
+	LDE_JUMP_RESOLUTION_STATE state(lpSartAddress);
 
 	if (!MapInstructionLen(state.lpFuncAddr, state)) {
 		return nullptr;
@@ -15,7 +15,7 @@ LPBYTE LDE::ResolveJump(_In_ const LPBYTE& lpSartAddress) {
 		   lpDispositionAddress = lpSartAddress + ucInstructionLength - ucDispositionSize;
 	switch (analyse_opcode_type(lpSartAddress, state.curr_instruction_ctx)) {
 		case _short | jump:
-		case _near | jump:
+		case _near  | jump:
 		case call:
 		case jump:
 		case conditional | jump | _short: {
@@ -137,12 +137,12 @@ LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Ino
 	LPVOID    lpDisposition		  = lpReferenceAddress + cbOpcodeLength + cbPrefixCount;
 	switch (analyse_opcode_type(lpReferenceAddress, state.curr_instruction_ctx)) {
 		case ret:
-		case ret | _short:
-		case ret | _near:
-		case ret | _far:
-		case ret | _near | _far:
-		case ret | _short | _near:
-		case ret | _far | _short:
+		case ret | _short :
+		case ret | _near  :
+		case ret | _far   :
+		case ret | _near  | _far   :
+		case ret | _short | _near  :
+		case ret | _far   | _short :
 		case ret | _near  | _short | _far: {
 			state.ecStatus = reached_end_of_function;
 			return lpReferenceAddress;
@@ -334,6 +334,18 @@ void LDE::SetCurrentContextRipRel(_Inout_ BYTE& ucCurrentInstructionCtx) {
 	ucCurrentInstructionCtx |= RIP_RELATIVE_MASK;
 }
 
+void LDE::incrementInstructionLen(_Inout_ BYTE& CandidateContext, _Inout_ lde_error_codes& Status) {
+	if ((CandidateContext & 0x3C) < 0x3C) {
+		BYTE cb_new_inst_len = static_cast<BYTE>((GetInstructionLenCtx(CandidateContext) + 1) << 2);
+		CandidateContext &= 0xC3;
+		CandidateContext |= cb_new_inst_len;
+	}
+	else {
+		Status = instruction_overflow;
+	}
+}
+
+
 template<typename STATE>
 BYTE LDE::get_index_prefix_count(const BYTE ucIndex, STATE& state) {
 	if (ucIndex < state.instructionCount) { return state.prefixCountArray[ucIndex] & 0x0F; }
@@ -394,10 +406,10 @@ WORD LDE::analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE&
 		}
 		case 0x0F: {
 			switch (*(lpCandidate_addr + 1)) {
-				case 0x05: { return sys_call; }
-				case 0x07: { return sys_ret; }
+				case 0x05: { return sys_call;  }
+				case 0x07: { return sys_ret;   }
 				case 0x34: { return sys_enter; }
-				case 0x35: { return sys_exit; }
+				case 0x35: { return sys_exit;  }
 				default:   {
 					if ((*(lpCandidate_addr + 1) & 0xF0) == 0x80) {
 						SetCurrentContextRipRel(ucInstructionContext_ref);
@@ -410,14 +422,14 @@ WORD LDE::analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE&
 		}
 		case 0xFF: {
 			switch ((*(lpCandidate_addr + 1) & REG_MASK) >> 3) {
-				case 0:  { return indirect_inc; }
-				case 1:  { return indirect_dec; }
-				case 2:  { return indirect_call; }
+				case 0:  { return indirect_inc;		 }
+				case 1:  { return indirect_dec;		 }
+				case 2:  { return indirect_call;	 }
 				case 3:  { return indirect_far_call; }
-				case 4:  { return indirect_jump; }
+				case 4:  { return indirect_jump;	 }
 				case 5:  { return indirect_far_jump; }
-				case 6:  { return indirect_push; }
-				default: { return unknown; }
+				case 6:  { return indirect_push;	 }
+				default: { return unknown;			 }
 			}
 		}
 		default: {
@@ -448,7 +460,7 @@ void LDE::reset_hooking_contexts(_Inout_ LDE_HOOKING_STATE& state) {
 	for (BYTE i = NULL; i < state.cb_count_of_rip_indexes; i++) { state.rip_relative_indexes[i] = NULL; }
 	state.cb_count_of_rip_indexes  = NULL;
 	state.curr_instruction_ctx	   = NULL;
-	state.instructionCount = NULL;
+	state.instructionCount		   = NULL;
 
 }
 

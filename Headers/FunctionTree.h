@@ -119,7 +119,7 @@ struct FUNCTION_TREE {
 
 	inline DWORD checkIfTraced(BLOCK& CandidateBlock, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap) const;
 
-	void handleConditionalJump(const LPBYTE& lpShallowAddress, const LPBYTE&);
+	void handleConditionalJump(const LPBYTE& lpShallowAddress, const LPBYTE& lpDeepAddress, std::map<LPBYTE, BLOCK*>&RootsMap, std::map<LPBYTE, BLOCK*>&EndsMap, std::vector<DWORD>&explorationVec, BLOCK& CurrentBlock_t);
 
 	void Print() { using namespace std;
 		for (unique_ptr<BLOCK>& block: blocksVec) {

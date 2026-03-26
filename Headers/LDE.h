@@ -67,13 +67,16 @@ namespace opcodes {
 
 struct LDE_HOOKING_STATE {
 	LPVOID			lpFuncAddr;
-	lde_error_codes ecStatus;
-	BYTE			curr_instruction_ctx,
-					instructionCount,
-					cb_count_of_rip_indexes,
-					contextsArray[RELATIVE_TRAMPOLINE_SIZE],
-					prefixCountArray[RELATIVE_TRAMPOLINE_SIZE],
-					rip_relative_indexes[RELATIVE_TRAMPOLINE_SIZE];
+	lde_error_codes ecStatus				= success;
+	BYTE			curr_instruction_ctx	= 0,
+					instructionCount		= 0,
+					cb_count_of_rip_indexes = 0,
+					contextsArray[RELATIVE_TRAMPOLINE_SIZE]{ },
+					prefixCountArray[RELATIVE_TRAMPOLINE_SIZE]{ },
+					rip_relative_indexes[RELATIVE_TRAMPOLINE_SIZE]{ };
+
+	LDE_HOOKING_STATE(LPVOID lpTarget): lpFuncAddr(lpTarget) {
+	}
 };
 
 struct LDE_STATE {
@@ -88,30 +91,33 @@ struct LDE_STATE {
 	prefixCountArray(ROOT_BRANCH_INSTRUCTION_COUNT) {
 		ecStatus				 = success;
 		curr_instruction_ctx     = NULL;
-		instructionCount = NULL;
+		instructionCount		 = NULL;
 		cb_count_of_branches	 = NULL;
 	}
 };
 
 struct LDE_JUMP_RESOLUTION_STATE {
 	LPVOID			lpFuncAddr;
-	lde_error_codes ecStatus;
-	BYTE			curr_instruction_ctx,
-					instructionCount,
-					cb_count_of_rip_indexes,
-					contextsArray[1],
-					prefixCountArray[1],
-					rip_relative_indexes[1];
-	};
+	lde_error_codes ecStatus				= success;
+	BYTE			curr_instruction_ctx	= 0,
+					instructionCount		= 0,
+					cb_count_of_rip_indexes = 0,
+					contextsArray[1]		= { },
+					prefixCountArray[1]		= { },
+					rip_relative_indexes[1] = { };
 
-	enum IS_NEW_BRANCH: unsigned char {
-		no,
-		no_reached_ret,
-		yes_reached_conditional_branch,
-		yes_reached_non_conditional_branch,
-		yes_is_call,
-		algorithm_failed
-	};
+	LDE_JUMP_RESOLUTION_STATE(LPVOID lpTarget): lpFuncAddr(lpTarget) {
+	}
+};
+
+enum IS_NEW_BRANCH: unsigned char {
+	no,
+	no_reached_ret,
+	yes_reached_conditional_branch,
+	yes_reached_non_conditional_branch,
+	yes_is_call,
+	algorithm_failed
+};
 
 	enum state : BYTE {
 		success0,
@@ -144,9 +150,9 @@ public:
 			//cout << format("[!] Found Uninitialised memory @: {:#10X} Now Examining The Last instruction...\n", reinterpret_cast<DWORD64>(lpCodeBuffer));
 			return NULL;
 		}
-		state.ecStatus = success;
+		state.ecStatus			 = success;
 		LPBYTE lpReferenceBuffer = static_cast<LPBYTE>(lpCodeBuffer);
-		increment_inst_len(state);
+		incrementInstructionLen(state.curr_instruction_ctx, state.ecStatus);
 		switch (results[*lpReferenceBuffer]) {
 		case none: {
 			if (*lpReferenceBuffer == 0xC3 || *lpReferenceBuffer == 0xC2) { state.ecStatus = reached_end_of_function; }
@@ -264,7 +270,6 @@ private:
 		imm_eight_bytes = 0x80
 	};
 
-
 	static void logInstructionAndAddressCtx(_In_ const LPBYTE& lpReferenceAddress, _In_ const BYTE& CandidateContext, const BYTE& cbInstructionIndex);
 
 	inline static void incrementOpcodeLenCtx(_Inout_ BYTE& CandidateContext, _Inout_ lde_error_codes& StatusCode);
@@ -276,6 +281,8 @@ private:
 	inline static void set_curr_ctx_bRex_w(_Inout_ BYTE& ucInstruction_ctx);
 
 	inline static void SetCurrentContextRipRel(_Inout_ BYTE& ucCurrentInstructionCtx);
+
+	inline static void incrementInstructionLen(_Inout_ BYTE& CandidateContext, _Inout_ lde_error_codes& Status);
 
 	inline static BYTE getOpcodeLenCtx(_In_ const BYTE& ucCurrentInstruction_ctx);
 
@@ -295,18 +302,6 @@ private:
 
 	template<typename STATE>
 	static BYTE get_index_opcode_len(_In_ BYTE cbIndex, _In_ const STATE& state);
-
-	template<typename STATE>
-	static void increment_inst_len(_Inout_ STATE& state) {
-		if ((state.curr_instruction_ctx & 0x3C) < 0x3C) {
-			BYTE cb_new_inst_len = static_cast<BYTE>((GetInstructionLenCtx(state.curr_instruction_ctx) + 1) << 2);
-			state.curr_instruction_ctx &= 0xC3;
-			state.curr_instruction_ctx |= cb_new_inst_len;
-		}
-		else {
-			state.ecStatus = instruction_overflow;
-		}
-	}
 
 	template<typename STATE>
 	static void set_curr_opcode_len(_In_ BYTE cbOpcodeLength,_Inout_ STATE& state);

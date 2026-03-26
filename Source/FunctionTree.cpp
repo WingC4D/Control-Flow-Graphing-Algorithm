@@ -149,43 +149,12 @@ FUNCTION_TREE::ErrorCode FUNCTION_TREE::Trace() {
 				BYTE     *lpNextInstruction = lpReference + LDE::GetInstructionLenCtx(CurrentBlock_t.ldeState->contextsArray[CurrentBlock_t.ldeState->instructionCount - 1]),
 					     *lpResolvedJump	= LDE::ResolveJump(lpReference);
 				BOOLEAN   bAdded			= FALSE;
-				add_block result;
+				
 				if (lpNextInstruction < lpResolvedJump) {
-					result = addBlock(NEW_BRANCH_PREREQ{ lpNextInstruction, dwVecSize | CONDITIONAL_BRANCH_MASK,CurrentBlock_t.getIndex(), CurrentBlock_t.dwHeight + 1 },
-					RootsRefMap, EndsRefMap);
-					if (result == added) {
-						CurrentBlock_t.flowToVec.emplace_back(dwVecSize);
-						explorationVec.push_back(dwVecSize);
-						RootsRefMap[lpNextInstruction] = blocksVec[dwVecSize].get();
-						bAdded						   = TRUE;
-					} else if (result == was_traced) 
-						RootsRefMap.at(lpNextInstruction)->flowFromVec.emplace_back(CurrentBlock_t.getIndex());
-					
-					result = addBlock(NEW_BRANCH_PREREQ{ lpResolvedJump, bAdded + (dwVecSize | CONDITIONAL_BRANCH_MASK | C_JUMP_TAKEN_MASK),CurrentBlock_t.getIndex(), CurrentBlock_t.dwHeight + 1 },
-						RootsRefMap, EndsRefMap);
-					if (result == added) {
-						CurrentBlock_t.flowToVec.emplace_back(dwVecSize + bAdded);
-						explorationVec.push_back(dwVecSize + bAdded);
-						RootsRefMap[lpResolvedJump] = blocksVec[dwVecSize + bAdded].get();
-					} else if (result == was_traced) 
-						RootsRefMap.at(lpResolvedJump)->flowFromVec.emplace_back(CurrentBlock_t.getIndex());
-				} else {
-					result = addBlock(NEW_BRANCH_PREREQ{ lpResolvedJump, dwVecSize | CONDITIONAL_BRANCH_MASK, CurrentBlock_t.getIndex(), CurrentBlock_t.dwHeight + 1 },
-						RootsRefMap, EndsRefMap);
-					if (result == added) {
-						CurrentBlock_t.flowToVec.emplace_back(dwVecSize);
-						explorationVec.push_back(dwVecSize);
-						RootsRefMap[lpResolvedJump] = blocksVec[dwVecSize].get();
-						bAdded						= TRUE;
-					} else if (result == was_traced)
-						RootsRefMap.at(lpResolvedJump)->flowFromVec.emplace_back(CurrentBlock_t.getIndex());
-					result = addBlock(NEW_BRANCH_PREREQ{ lpNextInstruction, bAdded + (dwVecSize | CONDITIONAL_BRANCH_MASK | C_JUMP_TAKEN_MASK),CurrentBlock_t.getIndex(), CurrentBlock_t.dwHeight + 1 },
-						RootsRefMap, EndsRefMap);
-					if (result == added) {
-						RootsRefMap[lpNextInstruction] = blocksVec[dwVecSize + bAdded].get();
-						explorationVec.push_back(dwVecSize + 1);
-					} else if (result == was_traced) 
-						RootsRefMap.at(lpNextInstruction)->flowFromVec.emplace_back(CurrentBlock_t.getIndex());
+					handleConditionalJump(lpNextInstruction, lpResolvedJump, RootsRefMap, EndsRefMap, explorationVec, CurrentBlock_t);
+				}
+				else {
+					handleConditionalJump(lpResolvedJump, lpNextInstruction, RootsRefMap, EndsRefMap, explorationVec, CurrentBlock_t);
 				}
 				break;
 			}
@@ -385,4 +354,30 @@ void FUNCTION_TREE::TransferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewPare
 		OldParentBlock.flowToVec.clear();
 		OldParentBlock.flowToVec.push_back(NewParentBlock.getIndex());
 	}
+}
+
+void FUNCTION_TREE::handleConditionalJump(const LPBYTE& lpShallowAddress, const LPBYTE& lpDeepAddress, std::map<LPBYTE, BLOCK*>&RootsMap, std::map<LPBYTE, BLOCK*>&EndsMap, std::vector<DWORD>&explorationVec, BLOCK& CurrentBlock_t) {
+	BOOLEAN   bAdded = FALSE;
+	DWORD	  dwVecSize = static_cast<DWORD>(blocksVec.size());
+	
+	add_block  result = addBlock(NEW_BRANCH_PREREQ{ lpShallowAddress, dwVecSize | CONDITIONAL_BRANCH_MASK,CurrentBlock_t.getIndex(), CurrentBlock_t.dwHeight + 1 },
+		RootsMap, EndsMap);
+	if (result == added) {
+		CurrentBlock_t.flowToVec.emplace_back(dwVecSize);
+		explorationVec.push_back(dwVecSize);
+		RootsMap[lpShallowAddress] = blocksVec[dwVecSize].get();
+		bAdded = TRUE;
+	}
+	else if (result == was_traced) RootsMap.at(lpShallowAddress)->flowFromVec.emplace_back(CurrentBlock_t.getIndex());
+
+	result = addBlock(NEW_BRANCH_PREREQ{ lpDeepAddress, bAdded + (dwVecSize | CONDITIONAL_BRANCH_MASK | C_JUMP_TAKEN_MASK),CurrentBlock_t.getIndex(), CurrentBlock_t.dwHeight + 1 },
+		RootsMap, EndsMap);
+	if (result == added) {
+		CurrentBlock_t.flowToVec.emplace_back(dwVecSize + bAdded);
+		explorationVec.push_back(dwVecSize + bAdded);
+		RootsMap[lpDeepAddress] = blocksVec[dwVecSize + bAdded].get();
+	}
+	else if (result == was_traced)
+		RootsMap.at(lpDeepAddress)->flowFromVec.emplace_back(CurrentBlock_t.getIndex());
+	
 }
