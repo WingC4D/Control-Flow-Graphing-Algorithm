@@ -66,22 +66,22 @@ LPBYTE LDE::ResolveJump(_In_ const LPBYTE& lpSartAddress) {
 BYTE LDE::get_first_valid_instructions_size_hook(_Inout_ LPVOID *lpCodeBuffer, _Out_ LDE_HOOKING_STATE& state) {
 	if (!lpCodeBuffer) {
 		state.ecStatus = no_input;
-		return NULL;
+		return 0;
 	}
 	state.lpFuncAddr		  = *lpCodeBuffer;
 	BYTE *lpReference		  = static_cast<LPBYTE>(*lpCodeBuffer),
 		  cbAccumulatedLength = MapInstructionLen(lpReference, state);
 	if (!cbAccumulatedLength) {
 		state.ecStatus = wrong_input;
-		return NULL;
+		return 0;
 	}
 	if (traceIntoIAT(state)) {
 		reset_hooking_contexts(state);
-		lpReference   = static_cast<LPBYTE>(state.lpFuncAddr);
-		*lpCodeBuffer = lpReference;
-		cbAccumulatedLength = NULL;
+		lpReference			= static_cast<LPBYTE>(state.lpFuncAddr);
+	   *lpCodeBuffer		= lpReference;
+		cbAccumulatedLength = 0;
 		if (!state.lpFuncAddr) {
-			return NULL;
+			return 0;
 		}
 	} else {
 		prepareForNextStep(state);
@@ -94,19 +94,22 @@ BYTE LDE::get_first_valid_instructions_size_hook(_Inout_ LPVOID *lpCodeBuffer, _
 	while (cbAccumulatedLength < RELATIVE_TRAMPOLINE_SIZE && state.ecStatus == success) {
 		BYTE cbCurrentInstructionLength = MapInstructionLen(lpReference, state);
 		if (!cbCurrentInstructionLength) {
-			state.lpFuncAddr = analyse_redirecting_instruction(cbAccumulatedLength, state);
+			state.lpFuncAddr = analyse_redirecting_instruction(reinterpret_cast<DWORD&>(cbAccumulatedLength), state);
 			reset_hooking_contexts(state);
 			if (!state.lpFuncAddr) {
-				return NULL;
+				return 0;
 			}
 			lpReference			= static_cast<LPBYTE>(state.lpFuncAddr);
 			*lpCodeBuffer		= lpReference;
-			cbAccumulatedLength = NULL;
+			cbAccumulatedLength = 0;
 			continue;
 		}
-		if (*lpReference == opcodes::RETURN) { state.ecStatus = reached_end_of_function; break; }
 		//log_1(lpReference, state);
 		prepareForNextStep(state);
+		if (*lpReference == opcodes::RETURN) {
+			state.ecStatus = reached_end_of_function;
+			break;
+		}
 		if (is_RIP_relative(state)) {
 			state.rip_relative_indexes[state.cb_count_of_rip_indexes] = state.instructionCount;
 			state.cb_count_of_rip_indexes++;
@@ -116,15 +119,14 @@ BYTE LDE::get_first_valid_instructions_size_hook(_Inout_ LPVOID *lpCodeBuffer, _
 	}
 	//log_1(lpReference, state);	
 	//log_2(cbInstructionCounter);
-	if (state.ecStatus != success &&
-		state.ecStatus != reached_end_of_function) {
-		return NULL;
+	if (state.ecStatus != success && state.ecStatus != reached_end_of_function) {
+		return 0;
 	}
 	return cbAccumulatedLength;
 }
 
 template<typename STATE>
-LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Inout_ STATE& state) {using namespace std;
+LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD& cbAccumulatedLength, _Inout_ STATE& state) {using namespace std;
 	if (!state.instructionCount) {
 		state.ecStatus = wrong_input;
 		return nullptr;
@@ -132,8 +134,8 @@ LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Ino
 	BYTE	  ucLastValidIndex	  = state.instructionCount - 1,
 			  cbInstructionLength = get_index_ctx_inst_len(ucLastValidIndex, state),
 			  cbOpcodeLength	  = get_index_opcode_len(ucLastValidIndex, state),
-		      cbPrefixCount		  = get_index_prefix_count(ucLastValidIndex,state );
-	LPBYTE	  lpReferenceAddress  = static_cast<LPBYTE>(state.lpFuncAddr) + cbAccumulatedLength - cbInstructionLength;
+		      cbPrefixCount		  = get_index_prefix_count(ucLastValidIndex,state ),
+			 *lpReferenceAddress  = static_cast<LPBYTE>(state.lpFuncAddr) + cbAccumulatedLength - cbInstructionLength;
 	LPVOID    lpDisposition		  = lpReferenceAddress + cbOpcodeLength + cbPrefixCount;
 	switch (analyse_opcode_type(lpReferenceAddress, state.curr_instruction_ctx)) {
 		case ret:
@@ -150,11 +152,9 @@ LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Ino
 		case jump:
 		case call: {
 			INT32 i32RVA;
-			if (!is_curr_instruction_shortened(get_index_prefix_count(state.instructionCount, state), lpReferenceAddress)) {
-				i32RVA = *static_cast<PINT32>(lpDisposition);
-			} else {
-				i32RVA = *static_cast<PINT16>(lpDisposition);
-			}
+			is_curr_instruction_shortened(get_index_prefix_count(state.instructionCount, state), lpReferenceAddress) ?
+			  i32RVA = *static_cast<PINT16>(lpDisposition)
+			: i32RVA = *static_cast<PINT32>(lpDisposition);
 			return lpReferenceAddress + cbInstructionLength + i32RVA;
 		}
 		case indirect_call:
@@ -164,7 +164,7 @@ LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Ino
 			switch (cbInstructionLength - cbOpcodeLength) {
 				case SIZE_OF_BYTE: {
 					BYTE cbRVA = cbInstructionLength;
-					cbRVA += *static_cast<LPBYTE>(lpDisposition);
+					cbRVA	  += *static_cast<LPBYTE>(lpDisposition);
 #ifdef DEBUG
 					cout << format("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(lpReferenceAddress), *reinterpret_cast<PULONGLONG>(lpReferenceAddress + cbRVA));
 #endif
@@ -172,7 +172,7 @@ LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Ino
 				}
 				case SIZE_OF_WORD: {
 					WORD wRVA = cbInstructionLength;
-					wRVA += *static_cast<PWORD>(lpDisposition);
+					wRVA	 += *static_cast<PWORD>(lpDisposition);
 #ifdef DEBUG
 					cout << format("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(lpReferenceAddress), *reinterpret_cast<PULONGLONG>(lpReferenceAddress + wRVA));
 #endif
@@ -180,7 +180,7 @@ LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Ino
 				}
 				case SIZE_OF_DWORD: {
 					DWORD dwRVA = cbInstructionLength;
-					dwRVA += *static_cast<PDWORD>(lpDisposition);
+					dwRVA	   += *static_cast<PDWORD>(lpDisposition);
 #ifdef DEBUG
 					cout << format("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(lpReferenceAddress), *reinterpret_cast<PULONGLONG>(lpReferenceAddress + dwRVA));
 #endif
@@ -188,7 +188,7 @@ LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Ino
 				}
 				case SIZE_OF_QWORD: {
 					ULONGLONG ullRVA = cbInstructionLength;
-					ullRVA += *static_cast<PULONGLONG>(lpDisposition);
+					ullRVA		    += *static_cast<PULONGLONG>(lpDisposition);
 #ifdef DEBUG
 					cout << format("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(lpReferenceAddress), *reinterpret_cast<PULONGLONG>(lpReferenceAddress + ullRVA));
 #endif
@@ -253,24 +253,23 @@ void LDE::log_2(const BYTE& cbInstructionCounter, _In_ STATE& lde_state) { using
 
 template<typename STATE>
 void LDE::logInstructionAndAddress(_In_ const LPBYTE& lpReferenceAddress, _In_ const STATE& state) {
-	LPBYTE lpReferenceForPrint = lpReferenceAddress;
-	std::cout << std::format("#{:2d} @{:P} ",state.instructionCount, reinterpret_cast<LPVOID>(lpReferenceForPrint));
-	BYTE cbInstructionLen = GetInstructionLenCtx(state.curr_instruction_ctx);
-	for (BYTE i = NULL; i < cbInstructionLen; i++) {
-		std::cout << std::format("{:#04X} ", static_cast<BYTE>(*(lpReferenceForPrint + i)));
+	BYTE	cbInstructionLen    = GetInstructionLenCtx(state.curr_instruction_ctx);
+	LPVOID	lpReferenceForPrint = lpReferenceAddress;
+	std::cout << std::format("#{:2d} @{:P} ",state.instructionCount, lpReferenceForPrint);
+	for (BYTE i = 0; i < cbInstructionLen; i++) {
+		std::cout << std::format("{:#04X} ", *(lpReferenceAddress + i));
 	}
 	std::cout << "\n";
 }
 
 void LDE::logInstructionAndAddressCtx(_In_ const LPBYTE& lpReferenceAddress, _In_ const BYTE& CandidateContext, const BYTE& cbInstructionIndex) {
-	using namespace std;
 	LPVOID lpReferenceForPrint = lpReferenceAddress;
-	cout << format("#{:3d} @{:P} ", cbInstructionIndex, lpReferenceForPrint);
+	std::cout << std::format("#{:3d} @{:P} ", cbInstructionIndex, lpReferenceForPrint);
 	BYTE cbInstructionLen = GetInstructionLenCtx(CandidateContext);
-	for (BYTE i = NULL; i < cbInstructionLen; i++) {
-		cout << format("{:#04X} ", *(static_cast<BYTE*>(lpReferenceForPrint) + i));
+	for (BYTE i = 0; i < cbInstructionLen; i++) {
+		std::cout << std::format("{:#04X} ", *(static_cast<BYTE*>(lpReferenceForPrint) + i));
 	}
-	cout << "\n";
+	std::cout << "\n";
 }
 
 BOOLEAN LDE::find_n_fix_relocation(_Inout_ LPBYTE lpGateWayTrampoline, _In_ LPVOID lpTargetFunction, _In_ LDE_HOOKING_STATE& state) {
@@ -391,7 +390,7 @@ BOOLEAN LDE::analyse_sib_base(_In_ BYTE cbCandidate) {
 WORD LDE::analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE& ucInstructionContext_ref) {
 	switch (*lpCandidate_addr)  {
 		case 0xC2: { return ret | _far; }
-		case 0xC3: { return  ret; }
+		case 0xC3: { return ret; }
 		case 0xE8: {
 			SetCurrentContextRipRel(ucInstructionContext_ref);
 			return call;
@@ -451,7 +450,6 @@ BOOLEAN LDE::is_curr_instruction_shortened(const BYTE cbPrefixCount, LPBYTE lpRe
 	return FALSE;
 }
 
-
 void LDE::reset_hooking_contexts(_Inout_ LDE_HOOKING_STATE& state) {
 	for (BYTE i = NULL; i < state.instructionCount; i++) {
 		state.contextsArray[i]	  = NULL;
@@ -507,22 +505,19 @@ BOOLEAN LDE::traceIntoIAT(LDE_HOOKING_STATE& state) {
 	switch (analyse_opcode_type(static_cast<BYTE *>(state.lpFuncAddr), state.curr_instruction_ctx)) {
 		case indirect_far_jump:
 		case indirect_jump: {
-			BYTE cb_instruction_len = GetInstructionLenCtx(state.curr_instruction_ctx),
-				*lpRef				= static_cast<BYTE*>(state.lpFuncAddr),
-				 cb_opcode_len		= getOpcodeLenCtx(state.curr_instruction_ctx),
-				 cb_prefix_count	= getCurrentPrefixCount(state);
-			LPVOID lpDisposition = static_cast<BYTE*>(state.lpFuncAddr) + cb_opcode_len + cb_prefix_count;
-			DWORD iDisposition = cb_instruction_len;
-			iDisposition += *static_cast<PDWORD>(lpDisposition);
-			lpRef += iDisposition;
-			state.lpFuncAddr = *reinterpret_cast<LPVOID *>(lpRef);
+			BYTE  cb_instruction_len =  GetInstructionLenCtx(state.curr_instruction_ctx),
+				  cb_opcode_len		 =  getOpcodeLenCtx(state.curr_instruction_ctx),
+				  cb_prefix_count	 =  getCurrentPrefixCount(state);
+			int   iDisposition		 = *reinterpret_cast<int*>(static_cast<BYTE*>(state.lpFuncAddr) + cb_opcode_len + cb_prefix_count) + cb_instruction_len;
+			BYTE* lpRef				 =  static_cast<BYTE*>(state.lpFuncAddr) + iDisposition;
+			state.lpFuncAddr		 = *reinterpret_cast<LPVOID *>(lpRef);
 			return TRUE;
 		}
 		case jump: {
-			state.lpFuncAddr = static_cast<BYTE*>(state.lpFuncAddr) + GetInstructionLenCtx(state.curr_instruction_ctx) + *reinterpret_cast<int*>(static_cast<BYTE*>(state.lpFuncAddr) + getOpcodeLenCtx(state.curr_instruction_ctx) + getCurrentPrefixCount(state));
-			state.rip_relative_indexes[NULL] = NULL;
-			state.instructionCount	 = NULL;
-			state.cb_count_of_rip_indexes	 = NULL;
+			state.lpFuncAddr = static_cast<BYTE*>(state.lpFuncAddr) + GetInstructionLenCtx(state.curr_instruction_ctx);
+			state.rip_relative_indexes[0] = NULL;
+			state.instructionCount		  = NULL;
+			state.cb_count_of_rip_indexes = NULL;
 			return TRUE;
 		}
 		default:

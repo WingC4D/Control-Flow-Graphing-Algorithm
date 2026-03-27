@@ -512,7 +512,7 @@ private:
 	static WORD analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE& ucInstructionContext_ref);
 
 	template<typename STATE>
-	static LPBYTE analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Inout_ STATE& state);
+	static LPBYTE analyse_redirecting_instruction(_In_ DWORD& cbAccumulatedLength, _Inout_ STATE& state);
 
 	template<typename STATE>
 	static BYTE get_index_prefix_count(const BYTE ucIndex, STATE& state);
