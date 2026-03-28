@@ -100,6 +100,11 @@ struct FUNCTION_TREE_TRACE_CTX {
 	
 };
 
+struct CONDITIONAL_JUMP_ADDRESSES {
+	LPBYTE  lpShallowAddress,
+	        lpDeepAddress;
+};
+
 struct FUNCTION_TREE {
 	enum ErrorCode: BYTE {
 		success,
@@ -133,9 +138,7 @@ struct FUNCTION_TREE {
 
 	inline DWORD checkIfTraced(BLOCK& CandidateBlock, std::map<BYTE*, BLOCK*>& RootsMap, std::map<BYTE*, BLOCK*>& EndsMap) const;
 
-	void handleConditionalJump(const LPBYTE& lpShallowAddress, const LPBYTE& lpDeepAddress, const FUNCTION_TREE_TRACE_CTX& TraceContext);
-
-	void handleJump();
+	void handleJump(const LPBYTE& lpResolvedJump, const FUNCTION_TREE_TRACE_CTX& TraceContext);
 
 	void Print() { using namespace std;
 		for (unique_ptr<BLOCK>& block: blocksVec) {

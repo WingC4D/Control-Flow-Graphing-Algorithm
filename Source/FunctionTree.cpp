@@ -115,7 +115,6 @@ FUNCTION_TREE::ErrorCode FUNCTION_TREE::Trace() {
 		DWORD  dwCurrIdx	=  explorationVec[explorationVec.size() - 1],
 			   dwVecSize	=  static_cast<DWORD>(blocksVec.size());
 		BLOCK& CurrentBlock = *blocksVec[dwCurrIdx];
-		LPBYTE lpResolvedJump;
 		if (dwVecSize == MAX_BRANCH_INDEX) {
 			return failed;
 		}
@@ -130,21 +129,19 @@ FUNCTION_TREE::ErrorCode FUNCTION_TREE::Trace() {
 		FUNCTION_TREE_TRACE_CTX trace_ctx = { .rootsMap = RootsRefMap, .endsMap = EndsRefMap,  .currentBlock = CurrentBlock, .explorationVec = explorationVec };
 		switch (trace_result) {
 			case yes_reached_non_conditional_branch: {
-				lpResolvedJump   = LDE::ResolveJump(CurrentBlock.lpLandmarks->lpEnd);
-				add_block result = addBlock({ lpResolvedJump, dwVecSize,CurrentBlock.getIndex(), CurrentBlock.dwHeight + 1 }, RootsRefMap, EndsRefMap);
-				if (result == added) {
-					CurrentBlock.flowToVec.emplace_back(dwVecSize);
-					explorationVec.emplace_back(dwVecSize);
-					RootsRefMap[lpResolvedJump] = blocksVec[dwVecSize].get();
-				} else if (result == was_traced) 
-					RootsRefMap.at(lpResolvedJump)->flowFromVec.emplace_back(CurrentBlock.getIndex());
+				handleJump(LDE::ResolveJump(CurrentBlock.lpLandmarks->lpEnd), trace_ctx);
 				break;
 			}
 			case yes_reached_conditional_branch: {
-				lpResolvedJump		    = LDE::ResolveJump(CurrentBlock.lpLandmarks->lpEnd);
-				BYTE* lpNextInstruction = CurrentBlock.lpLandmarks->lpEnd + LDE::GetInstructionLenCtx(CurrentBlock.ldeState->contextsArray[CurrentBlock.ldeState->instructionCount - 1]);
-				lpNextInstruction < lpResolvedJump ? handleConditionalJump(lpNextInstruction, lpResolvedJump, trace_ctx)
-												   : handleConditionalJump(lpResolvedJump, lpNextInstruction, trace_ctx);
+				LPBYTE					   lpResolvedJump	 = LDE::ResolveJump(CurrentBlock.lpLandmarks->lpEnd),
+										   lpNextInstruction = CurrentBlock.lpLandmarks->lpEnd + LDE::GetInstructionLenCtx(CurrentBlock.ldeState->contextsArray[CurrentBlock.ldeState->instructionCount - 1]);
+				CONDITIONAL_JUMP_ADDRESSES cond_jump_ctx;
+				lpNextInstruction < lpResolvedJump ?
+					cond_jump_ctx = { .lpShallowAddress = lpNextInstruction, .lpDeepAddress = lpResolvedJump }:
+					cond_jump_ctx = { .lpShallowAddress = lpResolvedJump, .lpDeepAddress = lpNextInstruction };
+
+				handleJump(cond_jump_ctx.lpShallowAddress, trace_ctx);
+				handleJump(cond_jump_ctx.lpDeepAddress, trace_ctx);
 				break;
 			}
 			case no_reached_ret: {
@@ -343,26 +340,15 @@ void FUNCTION_TREE::TransferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewPare
 	}
 }
 
-void FUNCTION_TREE::handleConditionalJump(const LPBYTE& lpShallowAddress, const LPBYTE& lpDeepAddress, const FUNCTION_TREE_TRACE_CTX& TraceContext) {
-	BOOLEAN    bAdded    = FALSE;
-	DWORD	   dwVecSize = static_cast<DWORD>(blocksVec.size());
-	add_block  result    = addBlock(NEW_BRANCH_PREREQ{ lpShallowAddress, dwVecSize | CONDITIONAL_BRANCH_MASK,TraceContext.currentBlock.getIndex(), TraceContext.currentBlock.dwHeight + 1 }, TraceContext.rootsMap, TraceContext.endsMap);
+void FUNCTION_TREE::handleJump(const LPBYTE& lpResolvedJump, const FUNCTION_TREE_TRACE_CTX& TraceContext) {
+	DWORD	  dwVecSize = static_cast<DWORD>(blocksVec.size());
+	add_block result	= addBlock({ lpResolvedJump, dwVecSize,TraceContext.currentBlock.getIndex(), TraceContext.currentBlock.dwHeight + 1 }, TraceContext.rootsMap, TraceContext.endsMap);
 	if (result == added) {
 		TraceContext.currentBlock.flowToVec.emplace_back(dwVecSize);
 		TraceContext.explorationVec.emplace_back(dwVecSize);
-		TraceContext.rootsMap[lpShallowAddress] = blocksVec[dwVecSize].get();
-		bAdded = TRUE;
+		TraceContext.rootsMap[lpResolvedJump] = blocksVec[dwVecSize].get();
 	}
-	else if (result == was_traced) 
-		TraceContext.rootsMap.at(lpShallowAddress)->flowFromVec.emplace_back(TraceContext.currentBlock.getIndex());
-
-	result = addBlock(NEW_BRANCH_PREREQ{ lpDeepAddress, bAdded + (dwVecSize | CONDITIONAL_BRANCH_MASK | C_JUMP_TAKEN_MASK),TraceContext.currentBlock.getIndex(), TraceContext.currentBlock.dwHeight + 1 }, TraceContext.rootsMap, TraceContext.endsMap);
-	if (result == added) {
-		TraceContext.currentBlock.flowToVec.emplace_back(dwVecSize + bAdded);
-		TraceContext.explorationVec.emplace_back(dwVecSize + bAdded);
-		TraceContext.rootsMap[lpDeepAddress] = blocksVec[dwVecSize + bAdded].get();
+	else if (result == was_traced) {
+		TraceContext.rootsMap.at(lpResolvedJump)->flowFromVec.emplace_back(TraceContext.currentBlock.getIndex());
 	}
-	else if (result == was_traced)
-		TraceContext.rootsMap.at(lpDeepAddress)->flowFromVec.emplace_back(TraceContext.currentBlock.getIndex());
-	
 }
