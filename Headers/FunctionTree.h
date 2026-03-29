@@ -11,19 +11,19 @@ class  LDE;
 struct LDE_STATE;
 constexpr DWORD NEW_FUNCTIONS_BASE_SIZE = 0x00,
 			    ENDS_UNCOND_JUMP		= 0x20000000,
-				COND_BLOCK_MASK = 0X80000000,
+				COND_BLOCK_MASK		    = 0X80000000,
 				C_JUMP_TAKEN_MASK		= 0X40000000,
 				MAX_BRANCH_INDEX		= 0X1FFFFFFF,
 				INVALID_BLOCK_INDEX		= 0xFFFFFFFF;
 
 struct NEW_BRANCH_PREREQ {
-	LPBYTE  lpRoot;
+	LPBYTE lpRoot;
 	DWORD  dwIndex,
-				  dwParentIdx,
-				  dwHeight;
+		   dwParentIdx,
+		   dwHeight;
 
-	NEW_BRANCH_PREREQ(const LPBYTE& lpCandidate, const DWORD& dwNewBranchIndex, const DWORD& dwParentBranchIndex, const DWORD& dwNewBranchHeight):
-	lpRoot(const_cast<BYTE*>(lpCandidate)),
+	NEW_BRANCH_PREREQ(LPBYTE lpCandidate, DWORD dwNewBranchIndex, DWORD dwParentBranchIndex, DWORD dwNewBranchHeight):
+	lpRoot(lpCandidate),
 	dwIndex(dwNewBranchIndex),
 	dwParentIdx(dwParentBranchIndex),
 	dwHeight(dwNewBranchHeight) {
@@ -34,7 +34,7 @@ struct BLOCK_LANDMARKS {
 	const BYTE* lpRoot;
 	BYTE* lpEnd;
 
-	BLOCK_LANDMARKS(const LPBYTE& lpRootAddress, const LPBYTE& lpEndAddress):
+	BLOCK_LANDMARKS(LPBYTE lpRootAddress, LPBYTE lpEndAddress):
 	lpRoot(lpRootAddress),
 	lpEnd(lpEndAddress){
 	}
@@ -49,7 +49,7 @@ struct BLOCK {
 	std::vector<DWORD>				  flowFromVec;
 	std::vector<DWORD>				  flowToVec;
 
-	BLOCK(const LPBYTE& lpStartAddress, const DWORD dwParentIdx, const DWORD& dwBranchIdx, const DWORD& dwBranchHeight):
+	BLOCK(LPBYTE lpStartAddress, DWORD dwParentIdx, DWORD dwBranchIdx, DWORD dwBranchHeight):
 	lpLandmarks(std::make_unique<BLOCK_LANDMARKS>(lpStartAddress, nullptr)),
 	ldeState(std::make_unique<LDE_STATE>()),
 	flowFromVec(NULL), flowToVec(NULL) {
@@ -62,25 +62,25 @@ struct BLOCK {
 
 	IS_NEW_BRANCH Trace(std::vector<BYTE*>& NewFunctionsVec);
 
-	IS_NEW_BRANCH TraceUntil(std::vector<BYTE*>& vNewFunctionsVec,  const LPBYTE& lpUntilAddress);
+	IS_NEW_BRANCH TraceUntil(std::vector<BYTE*>& vNewFunctionsVec,  LPBYTE lpUntilAddress);
 
 	void print() const; 
 
 	void logIndex() const;
 
-	inline BOOLEAN isInRange(const LPBYTE& CandidateLandmarks_t) const;
+	inline BOOLEAN isInRange(LPBYTE CandidateLandmarks_t) const;
 
-	BOOLEAN isInstructionHead(const LPBYTE& lpCandidate) const;
+	BOOLEAN isInstructionHead(LPBYTE lpCandidate) const;
 
-	void findNewEnd(const LPBYTE& lpInterlacingRoot) const;
+	void findNewEnd(LPBYTE lpInterlacingRoot) const;
 
 	inline DWORD getIndex(void) const;
 	
-	inline void resize(const BYTE& sNewSize, const LPBYTE& lpNewEndAddress) const;
+	inline void resize(BYTE sNewSize, LPBYTE lpNewEndAddress) const;
 
-	inline void handleEndOfTrace(const LPBYTE& lpCurrentAddress, LDE_STATE& state);
+	inline void handleEndOfTrace(LPBYTE lpCurrentAddress, LDE_STATE& state);
 
-	inline static void addResolvedCall(std::vector<LPBYTE>& NewFunctionVec, const LPBYTE& lpResolvedAddress);
+	inline static void addResolvedCall(std::vector<LPBYTE>& NewFunctionVec, LPBYTE lpResolvedAddress);
 };
 
 enum add_block : BYTE
@@ -135,7 +135,7 @@ struct FUNCTION_TREE {
 
 	void TransferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewParentBlock) const;
 
-	inline BOOLEAN checkIfTraced(BLOCK& CandidateBlock, std::map<BYTE*, BLOCK*>& RootsMap) const;
+	inline BOOLEAN checkIfTraced(BLOCK& JustTracedBlock, std::map<BYTE*, BLOCK*>& RootsMap) const;
 
 	void handleJump(LPBYTE lpResolvedJump, DWORD dwNewBlockIndex, const FUNCTION_TREE_TRACE_CTX& TraceContext);
 
