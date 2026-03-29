@@ -138,7 +138,7 @@ public:
 
 	static IS_NEW_BRANCH checkForNewBlock(LDE_STATE& state, const LPBYTE& lpReference);
 
-	inline static BYTE GetInstructionLenCtx(_In_ const BYTE& ucCurrentInstruction_ctx);
+	inline static BYTE GetInstructionLenCtx(_In_ BYTE ucCurrentInstruction_ctx);
 
 	template<typename STATE>
 	static BYTE MapInstructionLen(_In_ const LPVOID& lpCodeBuffer, _Inout_ STATE& state) { using namespace std;
@@ -284,15 +284,15 @@ private:
 
 	inline static void incrementInstructionLen(_Inout_ BYTE& CandidateContext, _Inout_ lde_error_codes& Status);
 
-	inline static BYTE getOpcodeLenCtx(_In_ const BYTE& ucCurrentInstruction_ctx);
+	inline static BYTE getOpcodeLenCtx(_In_ BYTE ucCurrentInstruction_ctx);
 
 	static BOOLEAN traceIntoIAT(LDE_HOOKING_STATE& state);
 
-	static inline BOOLEAN is_curr_instruction_shortened(const BYTE cbPrefixCount, LPBYTE lpReferenceAddress);
+	static inline BOOLEAN is_curr_instruction_shortened(BYTE cbPrefixCount, LPBYTE lpReferenceAddress);
 
 	inline static BOOLEAN analyse_sib_base(_In_ BYTE cbCandidate);
 
-	inline static BOOLEAN isRexCtx(_In_ const BYTE& CandidateContext);
+	inline static BOOLEAN isRexCtx(_In_ BYTE CandidateContext);
 
 	template<typename STATE>
 	static BOOLEAN is_RIP_relative(const _In_ STATE& state);
@@ -307,10 +307,10 @@ private:
 	static void set_curr_opcode_len(_In_ BYTE cbOpcodeLength,_Inout_ STATE& state);
 
 	template<typename STATE>
-	static void logInstructionAndAddress(_In_ const LPBYTE& lpReferenceAddress, _In_ const STATE& state);
+	static void logInstructionAndAddress(_In_ LPBYTE lpReferenceAddress, _In_ const STATE& state);
 
 	template<typename STATE>
-	static void log_2(_In_ const BYTE& cbInstructionCounter, _In_ STATE& lde_state);
+	static void log_2(_In_ BYTE cbInstructionCounter, _In_ STATE& lde_state);
 
 	template<typename STATE>
 	static void log_1(_In_ LPBYTE lpReferenceAddress, _In_ const STATE& state);
@@ -509,13 +509,13 @@ private:
 		return SIZE_OF_DWORD;
 	}
 	
-	static WORD analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE& ucInstructionContext_ref);
+	static WORD analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE ucInstructionContext_ref);
 
 	template<typename STATE>
-	static LPBYTE analyse_redirecting_instruction(_In_ DWORD& cbAccumulatedLength, _Inout_ STATE& state);
+	static LPBYTE analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Inout_ STATE& state);
 
 	template<typename STATE>
-	static BYTE get_index_prefix_count(const BYTE ucIndex, STATE& state);
+	static BYTE get_index_prefix_count(BYTE ucIndex, STATE& state);
 
 	template<typename STATE>
 	static void prepareForNextStep(STATE& state){

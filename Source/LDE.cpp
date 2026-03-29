@@ -126,7 +126,7 @@ BYTE LDE::get_first_valid_instructions_size_hook(_Inout_ LPVOID *lpCodeBuffer, _
 }
 
 template<typename STATE>
-LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD& cbAccumulatedLength, _Inout_ STATE& state) {using namespace std;
+LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Inout_ STATE& state) {
 	if (!state.instructionCount) {
 		state.ecStatus = wrong_input;
 		return nullptr;
@@ -166,7 +166,7 @@ LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD& cbAccumulatedLength, _In
 					BYTE cbRVA = cbInstructionLength;
 					cbRVA	  += *static_cast<LPBYTE>(lpDisposition);
 #ifdef DEBUG
-					cout << format("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(lpReferenceAddress), *reinterpret_cast<PULONGLONG>(lpReferenceAddress + cbRVA));
+					std::cout << std::format("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(lpReferenceAddress), *reinterpret_cast<PULONGLONG>(lpReferenceAddress + cbRVA));
 #endif
 					return *reinterpret_cast<LPBYTE *>(lpReferenceAddress + cbRVA);
 				}
@@ -174,7 +174,7 @@ LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD& cbAccumulatedLength, _In
 					WORD wRVA = cbInstructionLength;
 					wRVA	 += *static_cast<PWORD>(lpDisposition);
 #ifdef DEBUG
-					cout << format("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(lpReferenceAddress), *reinterpret_cast<PULONGLONG>(lpReferenceAddress + wRVA));
+					std::cout << std::format("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(lpReferenceAddress), *reinterpret_cast<PULONGLONG>(lpReferenceAddress + wRVA));
 #endif
 					return *reinterpret_cast<LPBYTE *>(lpReferenceAddress + wRVA);
 				}
@@ -182,7 +182,7 @@ LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD& cbAccumulatedLength, _In
 					DWORD dwRVA = cbInstructionLength;
 					dwRVA	   += *static_cast<PDWORD>(lpDisposition);
 #ifdef DEBUG
-					cout << format("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(lpReferenceAddress), *reinterpret_cast<PULONGLONG>(lpReferenceAddress + dwRVA));
+					std::cout << std::format("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(lpReferenceAddress), *reinterpret_cast<PULONGLONG>(lpReferenceAddress + dwRVA));
 #endif
 					return *reinterpret_cast<LPBYTE *>(lpReferenceAddress + dwRVA);
 				}
@@ -190,7 +190,7 @@ LPBYTE LDE::analyse_redirecting_instruction(_In_ DWORD& cbAccumulatedLength, _In
 					ULONGLONG ullRVA = cbInstructionLength;
 					ullRVA		    += *static_cast<PULONGLONG>(lpDisposition);
 #ifdef DEBUG
-					cout << format("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(lpReferenceAddress), *reinterpret_cast<PULONGLONG>(lpReferenceAddress + ullRVA));
+					std::cout << std::format("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(lpReferenceAddress), *reinterpret_cast<PULONGLONG>(lpReferenceAddress + ullRVA));
 #endif
 					return *reinterpret_cast<LPBYTE *>(lpReferenceAddress + ullRVA);
 				}
@@ -243,7 +243,7 @@ void LDE::log_1(_In_ const LPBYTE lpReferenceAddress, _In_ const STATE& state) {
 }
 
 template<typename STATE>
-void LDE::log_2(const BYTE& cbInstructionCounter, _In_ STATE& lde_state) { using namespace std;
+void LDE::log_2(BYTE cbInstructionCounter, _In_ STATE& lde_state) { using namespace std;
 	cout << "[i] Held contexts: ";
 	for (BYTE i = NULL; i < cbInstructionCounter; i++) {
 		cout << format("{:#4X}, ", retinterpret_cast<BYTE>(lde_state.contextsArray[i]));
@@ -252,7 +252,7 @@ void LDE::log_2(const BYTE& cbInstructionCounter, _In_ STATE& lde_state) { using
 }
 
 template<typename STATE>
-void LDE::logInstructionAndAddress(_In_ const LPBYTE& lpReferenceAddress, _In_ const STATE& state) {
+void LDE::logInstructionAndAddress(_In_ LPBYTE lpReferenceAddress, _In_ const STATE& state) {
 	BYTE	cbInstructionLen    = GetInstructionLenCtx(state.curr_instruction_ctx);
 	LPVOID	lpReferenceForPrint = lpReferenceAddress;
 	std::cout << std::format("#{:2d} @{:P} ",state.instructionCount, lpReferenceForPrint);
@@ -263,11 +263,11 @@ void LDE::logInstructionAndAddress(_In_ const LPBYTE& lpReferenceAddress, _In_ c
 }
 
 void LDE::logInstructionAndAddressCtx(_In_ const LPBYTE& lpReferenceAddress, _In_ const BYTE& CandidateContext, const BYTE& cbInstructionIndex) {
-	LPVOID lpReferenceForPrint = lpReferenceAddress;
-	std::cout << std::format("#{:3d} @{:P} ", cbInstructionIndex, lpReferenceForPrint);
+
+	std::cout << std::format("#{:3d} @{:P} ", cbInstructionIndex, reinterpret_cast<LPVOID>(lpReferenceAddress));
 	BYTE cbInstructionLen = GetInstructionLenCtx(CandidateContext);
 	for (BYTE i = 0; i < cbInstructionLen; i++) {
-		std::cout << std::format("{:#04X} ", *(static_cast<BYTE*>(lpReferenceForPrint) + i));
+		std::cout << std::format("{:#04X} ", *(lpReferenceAddress + i));
 	}
 	std::cout << "\n";
 }
@@ -289,7 +289,7 @@ BOOLEAN LDE::find_n_fix_relocation(_Inout_ LPBYTE lpGateWayTrampoline, _In_ LPVO
 		BYTE   cbInstructionLength = GetInstructionLenCtx(state.contextsArray[cb_count_of_passed_instructions]),
 		       cbOpCodeLength	   = get_index_opcode_len(state.rip_relative_indexes[i], state),
 			   cbPrefixLength	   = get_index_prefix_count(cb_count_of_passed_instructions, state),
-			  *lpOldTargetAddress  = lpRipRelativeAddress + cbInstructionLength + *reinterpret_cast<LPDWORD>(lpRipRelativeAddress + cbPrefixLength + cbOpCodeLength);
+			  *lpOldTargetAddress  = lpRipRelativeAddress + cbInstructionLength  + *reinterpret_cast<LPDWORD>(lpRipRelativeAddress + cbPrefixLength + cbOpCodeLength);
 		hkUINT hkiNewDisposition   = lpOldTargetAddress   - (lpGateWayTrampoline + uc_size_passed + cbInstructionLength); 
 		int	   iNewDisposition	   = static_cast<int>(hkiNewDisposition);
 		memcpy(lpGateWayTrampoline + uc_size_passed + cbOpCodeLength + cbPrefixLength, &iNewDisposition, sizeof(iNewDisposition));
@@ -298,7 +298,7 @@ BOOLEAN LDE::find_n_fix_relocation(_Inout_ LPBYTE lpGateWayTrampoline, _In_ LPVO
 }
 
 
-BOOLEAN LDE::isRexCtx(_In_ const BYTE& CandidateContext) {
+BOOLEAN LDE::isRexCtx(_In_ BYTE CandidateContext) {
 	return (CandidateContext & REX_MASK) >> 6;
 }
 
@@ -307,11 +307,11 @@ BOOLEAN LDE::is_RIP_relative(_In_ const STATE& state) {
 	return (state.curr_instruction_ctx & RIP_RELATIVE_MASK) >> 7;
 }
 
-BYTE LDE::GetInstructionLenCtx(_In_ const BYTE& ucCurrentInstruction_ctx) {
+BYTE LDE::GetInstructionLenCtx(_In_ BYTE ucCurrentInstruction_ctx) {
 	return static_cast<BYTE>(ucCurrentInstruction_ctx & 0x3C) >> 2;
 }
 
-BYTE LDE::getOpcodeLenCtx(const _In_ BYTE& ucCurrentInstruction_ctx) {
+BYTE LDE::getOpcodeLenCtx(_In_ BYTE ucCurrentInstruction_ctx) {
 	return (ucCurrentInstruction_ctx & 0x03) + 1;
 }
 
@@ -387,7 +387,7 @@ BOOLEAN LDE::analyse_sib_base(_In_ BYTE cbCandidate) {
 }
 
 
-WORD LDE::analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE& ucInstructionContext_ref) {
+WORD LDE::analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE ucInstructionContext_ref) {
 	switch (*lpCandidate_addr)  {
 		case 0xC2: { return ret | _far; }
 		case 0xC3: { return ret; }
