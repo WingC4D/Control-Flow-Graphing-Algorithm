@@ -121,7 +121,7 @@ struct FUNCTION_TREE {
 	vLeafs(NULL) {
 		using namespace std;
 		blocksVec.emplace_back(make_unique<BLOCK>(lpFunctionRoot, 0xFFFFFFFF, NULL, NULL));
-		dwNewFunctionsCount = NULL;
+		dwNewFunctionsCount = 0;
 	}
 
 	ErrorCode Trace();
