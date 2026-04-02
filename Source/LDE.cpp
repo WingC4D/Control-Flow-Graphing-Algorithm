@@ -221,7 +221,7 @@ void LDE::log_1(_In_ const LPBYTE lpReferenceAddress, _In_ const STATE& state) {
 	
 	if (cbCurrentPrefixCount) {
 		cout << " Found Prefix Bytes: ";
-		for (i = NULL; i < cbCurrentPrefixCount; i++) {
+		for (i = 0; i < cbCurrentPrefixCount; i++) {
 			cout << format("{:#4X} ", *(lpReferenceAddress + i));
 		}
 		cout << " | ";
@@ -344,7 +344,7 @@ template<typename STATE>
 BYTE LDE::get_index_prefix_count(const BYTE ucIndex, STATE& state) {
 	if (ucIndex < state.instructionCount) { return state.prefixCountArray[ucIndex] & 0x0F; }
 	state.ecStatus = wrong_input;
-	return NULL;
+	return 0;
 }
 
 void LDE::incrementOpcodeLenCtx(BYTE& CandidateContext, lde_error_codes& StatusCode) {
@@ -428,7 +428,7 @@ WORD LDE::analyse_opcode_type(_In_ const LPBYTE lpCandidate_addr, _Inout_ BYTE& 
 }
 
 BOOLEAN LDE::is_curr_instruction_shortened(const BYTE cbPrefixCount, LPBYTE lpReferenceAddress) {
-	for (BYTE i = NULL; i < cbPrefixCount; i++) {
+	for (BYTE i = 0; i < cbPrefixCount; i++) {
 		if (*(lpReferenceAddress - i) == 0x66) {
 			return TRUE;
 		}
@@ -441,7 +441,7 @@ void LDE::reset_hooking_contexts(_Inout_ LDE_HOOKING_STATE& state) {
 		state.contextsArray[i]	  = 0;
 		state.prefixCountArray[i] = 0;
 	}
-	for (BYTE i = 0; i < state.cb_count_of_rip_indexes; i++) { state.rip_relative_indexes[i] = NULL; }
+	for (BYTE i = 0; i < state.cb_count_of_rip_indexes; i++) { state.rip_relative_indexes[i] = 0; }
 	state.cb_count_of_rip_indexes  = 0;
 	state.curr_instruction_ctx	   = 0;
 	state.instructionCount		   = 0;
