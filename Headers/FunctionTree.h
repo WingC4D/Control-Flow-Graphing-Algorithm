@@ -120,7 +120,7 @@ struct FUNCTION_TREE {
 	lpRoot(lpFunctionRoot),
 	vLeafs(NULL) {
 		using namespace std;
-		blocksVec.emplace_back(make_unique<BLOCK>(lpFunctionRoot, 0xFFFFFFFF, NULL, NULL));
+		blocksVec.emplace_back(make_unique<BLOCK>(lpFunctionRoot, 0xFFFFFFFF, 0, 0));
 		dwNewFunctionsCount = 0;
 	}
 
