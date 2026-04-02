@@ -2,31 +2,29 @@
 
 BOOLEAN BLOCK::isInRange(LPBYTE CandidateLandmarks_t) const {
 	if (!lpLandmarks->lpEnd) {
-		return FALSE;
+		return false;
 	}
 	if (lpLandmarks->lpRoot > CandidateLandmarks_t) {
-		return FALSE;
+		return false;
 	}
 	if (lpLandmarks->lpEnd  < CandidateLandmarks_t) {
-		return FALSE;
+		return false;
 	}
-	return TRUE;
+	return true;
 }
 
 BOOLEAN BLOCK::isInstructionHead(LPBYTE lpCandidate) const {
 	if (!lpLandmarks->lpEnd) {
-		return FALSE;
+		return false;
 	}
-	DWORD dwAccumulatedLength = 0;
-	BYTE ucInstructionIdx	  = 0;
-	for (BYTE Context: ldeState->contextsArray) {
+	
+	for (DWORD dwAccumulatedLength = 0; BYTE Context: ldeState->contextsArray) {
 		if (lpLandmarks->lpRoot + dwAccumulatedLength == lpCandidate) {
-			return TRUE;
+			return true;
 		}
 		dwAccumulatedLength += LDE::GetInstructionLenCtx(Context);
-		ucInstructionIdx++;
 	}
-	return FALSE;
+	return false;
 }
 
 void BLOCK::resize(BYTE sNewSize, LPBYTE lpNewEndAddress) const {
@@ -39,9 +37,9 @@ void BLOCK::resize(BYTE sNewSize, LPBYTE lpNewEndAddress) const {
 }
 
 void BLOCK::findNewEnd(LPBYTE lpInterlacingRoot) const {
-	DWORD dwAccumulatedLength   = NULL;
-	BYTE  ucLastInstructionLen  = NULL,
-	      cbNewInstructionCount = NULL;
+	DWORD dwAccumulatedLength   = 0;
+	BYTE  ucLastInstructionLen  = 0,
+	      cbNewInstructionCount = 0;
 	for (BYTE Context: ldeState->contextsArray) {
 		if (const_cast<BYTE*>(lpLandmarks->lpRoot) + dwAccumulatedLength == lpInterlacingRoot) {
 			if (cbNewInstructionCount) {
@@ -56,38 +54,39 @@ void BLOCK::findNewEnd(LPBYTE lpInterlacingRoot) const {
 }
 
 BOOLEAN FUNCTION_TREE::splitBlock(BLOCK& SplitBlock, LPBYTE lpSplittingAddress, std::map<BYTE*, BLOCK*>& RootsMap) {
-	if (!SplitBlock.isInRange(lpSplittingAddress)) 
-		return FALSE;
-	DWORD dwNewIndex = static_cast<DWORD>(blocksVec.size()),
+	if (!SplitBlock.isInRange(lpSplittingAddress)) {
+		return false;
+	}
+	DWORD dwNewIndex					= static_cast<DWORD>(blocksVec.size()),
 		  dwAccumulatedLength			= 0;
 	BYTE  ucLastInstructionLen			= 0,
-		  i								= 0,
+		  ucIteratedInstructions		= 0,
 	      ucOriginalInstructionCount	= SplitBlock.ldeState->instructionCount;
 	for (BYTE Context: SplitBlock.ldeState->contextsArray) {
 		if (SplitBlock.lpLandmarks->lpRoot + dwAccumulatedLength == lpSplittingAddress) {
-			if (i) {
+			if (ucIteratedInstructions) {
 				blocksVec.emplace_back(std::make_unique<BLOCK>(lpSplittingAddress, SplitBlock.getIndex(), dwNewIndex, SplitBlock.dwHeight + 1));
 				BLOCK& NewBlock					= *blocksVec[dwNewIndex];
 				BYTE   NewBlockInstructionCount = 0;
-				for (; i + NewBlockInstructionCount < ucOriginalInstructionCount; NewBlockInstructionCount++) {
-					NewBlock.ldeState->contextsArray[NewBlockInstructionCount]	  = SplitBlock.ldeState->contextsArray[NewBlockInstructionCount + i];
-					NewBlock.ldeState->prefixCountArray[NewBlockInstructionCount] = SplitBlock.ldeState->prefixCountArray[NewBlockInstructionCount + i];
+				for (; ucIteratedInstructions + NewBlockInstructionCount < ucOriginalInstructionCount; NewBlockInstructionCount++) {
+					NewBlock.ldeState->contextsArray[NewBlockInstructionCount]	  = SplitBlock.ldeState->contextsArray[NewBlockInstructionCount + ucIteratedInstructions];
+					NewBlock.ldeState->prefixCountArray[NewBlockInstructionCount] = SplitBlock.ldeState->prefixCountArray[NewBlockInstructionCount + ucIteratedInstructions];
 				}
 				NewBlock.resize(NewBlockInstructionCount, SplitBlock.lpLandmarks->lpEnd);
 				TransferUniqueChildren(SplitBlock, NewBlock);
-				SplitBlock.resize(i, lpSplittingAddress - ucLastInstructionLen);
-				RootsMap[const_cast<BYTE*>(NewBlock.lpLandmarks->lpRoot)] = blocksVec[NewBlock.getIndex()].get();
+				SplitBlock.resize(ucIteratedInstructions, lpSplittingAddress - ucLastInstructionLen);
+				RootsMap[lpSplittingAddress] = blocksVec[dwNewIndex].get();
 			}
 			break;
 		}
 		ucLastInstructionLen = LDE::GetInstructionLenCtx(Context);
 		dwAccumulatedLength += ucLastInstructionLen;
-		i++;
+		ucIteratedInstructions++;
 	}
-	if (i == ucOriginalInstructionCount) {
-		return FALSE;
+	if (ucIteratedInstructions == ucOriginalInstructionCount) {
+		return false;
 	}
-	return TRUE;
+	return true;
 }
 
 add_block FUNCTION_TREE::addBlock(LPBYTE lpToAdd, DWORD dwIndex, DWORD dwParentIndex, DWORD dwHeight, std::map<BYTE*, BLOCK*>& RootsMap) {
@@ -134,8 +133,8 @@ FUNCTION_TREE::ErrorCode FUNCTION_TREE::Trace() {
 				break;
 			}
 			case yes_reached_conditional_branch: {
-				LPBYTE					   lpResolvedJump	 = LDE::ResolveJump(CurrentBlock.lpLandmarks->lpEnd),
-										   lpNextInstruction = CurrentBlock.lpLandmarks->lpEnd + LDE::GetInstructionLenCtx(CurrentBlock.ldeState->contextsArray[CurrentBlock.ldeState->instructionCount - 1]);
+				LPBYTE				 lpResolvedJump	   = LDE::ResolveJump(CurrentBlock.lpLandmarks->lpEnd),
+									 lpNextInstruction = CurrentBlock.lpLandmarks->lpEnd + LDE::GetInstructionLenCtx(CurrentBlock.ldeState->contextsArray[CurrentBlock.ldeState->instructionCount - 1]);
 				CONDITIONAL_JUMP_CTX cond_jump_ctx;
 				lpNextInstruction < lpResolvedJump ?
 					cond_jump_ctx = { .lpShallowAddress = lpNextInstruction, .lpDeepAddress = lpResolvedJump, .dwShallowIndex = dwVecSize | COND_BLOCK_MASK, .dwDeepIndex = dwVecSize + 1 | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK }:
@@ -275,28 +274,30 @@ IS_NEW_BRANCH BLOCK::TraceUntil(_Out_ std::vector<BYTE*>& vNewFunctionsVec, LPBY
 BOOLEAN FUNCTION_TREE::checkIfTraced(BLOCK& JustTracedBlock, std::map<BYTE*, BLOCK*>& RootsMap) const {
 	std::map<BYTE*, BLOCK*>::iterator itNextBlock = RootsMap.upper_bound(const_cast<BYTE*>(JustTracedBlock.lpLandmarks->lpRoot));
 	if (itNextBlock == RootsMap.end()) {
-		return FALSE;
+		return false;
 	}
 	if (JustTracedBlock.dwIndex == itNextBlock->second->dwIndex) {
-		return FALSE;
+		return false;
 	}
 	if (!JustTracedBlock.isInRange(const_cast<BYTE*>(itNextBlock->second->lpLandmarks->lpRoot))) {
-		return FALSE;
+		return false;
 	}
 	JustTracedBlock.findNewEnd(const_cast<BYTE*>(itNextBlock->second->lpLandmarks->lpRoot));
 	TransferUniqueChildren(JustTracedBlock, *itNextBlock->second);
-	return TRUE;
+	return true;
 }
 
 void BLOCK::print(void) const {
 	if (!lpLandmarks->lpEnd) {
 		std::cout << "[!] This Branch Is Not Traced Yet.";
 	}
-	DWORD dwAccumulatedLength = 0;
-	BYTE  i					  = 0;
-	for (BYTE Context: ldeState->contextsArray) {
-		LDE::logInstructionAndAddressCtx(const_cast<LPBYTE>(lpLandmarks->lpRoot) + dwAccumulatedLength, Context, i);
+	for (DWORD dwAccumulatedLength = 0, i = 0; BYTE Context: ldeState->contextsArray) {
+		LDE::logInstructionAndAddressCtx(const_cast<LPBYTE>(lpLandmarks->lpRoot) + dwAccumulatedLength, Context, static_cast<BYTE>(i));
 		dwAccumulatedLength += LDE::GetInstructionLenCtx(Context);
+		if (i == 0xFF) {
+			std::cout << std::format("Hit an error while printing Block #{:03d}\n", dwIndex);
+			return;
+		}
 		i++;
 	}
 }
@@ -312,8 +313,7 @@ void FUNCTION_TREE::TransferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewPare
 		return;
 	}
 	bool g_state = false;
-	for (DWORD  child_idx: OldParentBlock.flowToVec) {
-		BYTE parents_idx = 0;
+	for (BYTE parents_idx = 0; DWORD  child_idx: OldParentBlock.flowToVec) {
 		for (DWORD dwParentIndex: blocksVec[child_idx]->flowFromVec) {
 			if (dwParentIndex == OldParentBlock.getIndex()) {
 				blocksVec[child_idx]->flowFromVec[parents_idx] = NewParentBlock.getIndex();

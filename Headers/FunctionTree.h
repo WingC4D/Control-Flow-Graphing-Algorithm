@@ -43,36 +43,34 @@ struct BLOCK_LANDMARKS {
 
 struct BLOCK {
 	std::unique_ptr<BLOCK_LANDMARKS> lpLandmarks;
-	DWORD							  dwIndex;
-	DWORD							  dwHeight;
-	std::unique_ptr<LDE_STATE>		  ldeState;
-	std::vector<DWORD>				  flowFromVec;
-	std::vector<DWORD>				  flowToVec;
+	DWORD							 dwIndex;
+	DWORD							 dwHeight;
+	std::unique_ptr<LDE_STATE>		 ldeState;
+	std::vector<DWORD>				 flowFromVec;
+	std::vector<DWORD>				 flowToVec;
 
 	BLOCK(LPBYTE lpStartAddress, DWORD dwParentIdx, DWORD dwBranchIdx, DWORD dwBranchHeight):
 	lpLandmarks(std::make_unique<BLOCK_LANDMARKS>(lpStartAddress, nullptr)),
-	ldeState(std::make_unique<LDE_STATE>()),
-	flowFromVec(NULL), flowToVec(NULL) {
-		dwIndex = dwBranchIdx;
+	ldeState(std::make_unique<LDE_STATE>()), flowFromVec(0), flowToVec(0) {
+		dwIndex  = dwBranchIdx;
 		dwHeight = dwBranchHeight;
-		if (dwParentIdx != 0xFFFFFFFF) 
+		if (dwParentIdx != 0xFFFFFFFF) {
 			flowFromVec.emplace_back(dwParentIdx);
-		
+		}
 	}
-
-	IS_NEW_BRANCH Trace(std::vector<BYTE*>& NewFunctionsVec);
-
-	IS_NEW_BRANCH TraceUntil(std::vector<BYTE*>& vNewFunctionsVec,  LPBYTE lpUntilAddress);
-
 	void print() const; 
 
 	void logIndex() const;
 
-	inline BOOLEAN isInRange(LPBYTE CandidateLandmarks_t) const;
+	void findNewEnd(LPBYTE lpInterlacingRoot) const;
 
 	BOOLEAN isInstructionHead(LPBYTE lpCandidate) const;
 
-	void findNewEnd(LPBYTE lpInterlacingRoot) const;
+	IS_NEW_BRANCH Trace(std::vector<BYTE*>& NewFunctionsVec);
+
+	IS_NEW_BRANCH TraceUntil(std::vector<BYTE*>& vNewFunctionsVec, LPBYTE lpUntilAddress);
+
+	inline BOOLEAN isInRange(LPBYTE CandidateLandmarks_t) const;
 
 	inline DWORD getIndex(void) const;
 	
@@ -81,10 +79,10 @@ struct BLOCK {
 	inline void handleEndOfTrace(LPBYTE lpCurrentAddress, LDE_STATE& state);
 
 	inline static void addResolvedCall(std::vector<LPBYTE>& NewFunctionVec, LPBYTE lpResolvedAddress);
+
 };
 
-enum add_block : BYTE
-{
+enum add_block: BYTE {
 	was_traced = 0,
 	added	   = 1,
 	split	   = 2
@@ -109,7 +107,6 @@ struct FUNCTION_TREE {
 		success,
 		failed
 	};
-	
 
 	std::vector<std::unique_ptr<BLOCK>> blocksVec;
 	std::vector<BYTE*> newFunctionsVec;
@@ -123,7 +120,7 @@ struct FUNCTION_TREE {
 	lpRoot(lpFunctionRoot),
 	vLeafs(NULL) {
 		using namespace std;
-		blocksVec.insert(blocksVec.begin(),  make_unique<BLOCK>(lpFunctionRoot, 0xFFFFFFFF, NULL, NULL));
+		blocksVec.emplace_back(make_unique<BLOCK>(lpFunctionRoot, 0xFFFFFFFF, NULL, NULL));
 		dwNewFunctionsCount = NULL;
 	}
 

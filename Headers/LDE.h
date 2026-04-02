@@ -80,19 +80,19 @@ struct LDE_HOOKING_STATE {
 };
 
 struct LDE_STATE {
-	lde_error_codes ecStatus;
-	BYTE			curr_instruction_ctx,
-					instructionCount,
-					cb_count_of_branches;
-	std::deque<BYTE>contextsArray,
-					prefixCountArray;
+	lde_error_codes  ecStatus;
+	BYTE			 curr_instruction_ctx,
+					 instructionCount,
+					 cb_count_of_branches;
+	std::vector<BYTE>contextsArray,
+					 prefixCountArray;
 	LDE_STATE():
 	contextsArray(ROOT_BRANCH_INSTRUCTION_COUNT),
 	prefixCountArray(ROOT_BRANCH_INSTRUCTION_COUNT) {
 		ecStatus				 = success;
-		curr_instruction_ctx     = NULL;
-		instructionCount		 = NULL;
-		cb_count_of_branches	 = NULL;
+		curr_instruction_ctx     = 0;
+		instructionCount		 = 0;
+		cb_count_of_branches	 = 0;
 	}
 };
 
@@ -130,11 +130,11 @@ class LDE {
 public:
 	friend FUNCTION_TREE; friend  BLOCK;
 
-	static BYTE get_first_valid_instructions_size_hook(_Inout_ LPVOID* lpCodeBuffer, _Out_ LDE_HOOKING_STATE& state);
+	static BYTE get_first_valid_instructions_size_hook(_Inout_ LPVOID& lpCodeBuffer, _Out_ LDE_HOOKING_STATE& state);
 
 	static BOOLEAN find_n_fix_relocation(_Inout_ LPBYTE lpGateWayTrampoline, _In_ LPVOID lpTargetFunction, _In_  LDE_HOOKING_STATE& state);
 
-	static LPBYTE ResolveJump(_In_ const LPBYTE& lpSartAddress);
+	static LPBYTE ResolveJump(_In_ LPBYTE lpSartAddress);
 
 	static IS_NEW_BRANCH checkForNewBlock(LDE_STATE& state, const LPBYTE& lpReference);
 
@@ -270,7 +270,7 @@ private:
 		imm_eight_bytes = 0x80
 	};
 
-	static void logInstructionAndAddressCtx(_In_ const LPBYTE& lpReferenceAddress, _In_ const BYTE& CandidateContext, const BYTE& cbInstructionIndex);
+	static void logInstructionAndAddressCtx(_In_ LPBYTE lpReferenceAddress, _In_ BYTE CandidateContext, BYTE cbInstructionIndex);
 
 	inline static void incrementOpcodeLenCtx(_Inout_ BYTE& CandidateContext, _Inout_ lde_error_codes& StatusCode);
 
@@ -294,17 +294,13 @@ private:
 
 	inline static BOOLEAN isRexCtx(_In_ BYTE CandidateContext);
 
-	template<typename STATE>
-	static BOOLEAN is_RIP_relative(const _In_ STATE& state);
+	inline static BOOLEAN isRipRelativeCtx(_In_ BYTE CandidateContext);
 
 	template<typename STATE>
 	static BYTE get_index_ctx_inst_len(_In_ BYTE cbIndex, _Inout_ const STATE& state);
 
 	template<typename STATE>
 	static BYTE get_index_opcode_len(_In_ BYTE cbIndex, _In_ const STATE& state);
-
-	template<typename STATE>
-	static void set_curr_opcode_len(_In_ BYTE cbOpcodeLength,_Inout_ STATE& state);
 
 	template<typename STATE>
 	static void logInstructionAndAddress(_In_ LPBYTE lpReferenceAddress, _In_ const STATE& state);
@@ -509,7 +505,7 @@ private:
 		return SIZE_OF_DWORD;
 	}
 	
-	static WORD analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE ucInstructionContext_ref);
+	static WORD analyse_opcode_type(_In_ LPBYTE lpCandidate_addr, _Inout_ BYTE& InstructionContext_ref);
 
 	template<typename STATE>
 	static LPBYTE analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Inout_ STATE& state);

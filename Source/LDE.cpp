@@ -1,6 +1,6 @@
 #include "LDE.h"
 
-LPBYTE LDE::ResolveJump(_In_ const LPBYTE& lpSartAddress) {
+LPBYTE LDE::ResolveJump(_In_ LPBYTE lpSartAddress) {
 	LDE_JUMP_RESOLUTION_STATE state(lpSartAddress);
 
 	if (!MapInstructionLen(state.lpFuncAddr, state)) {
@@ -63,13 +63,13 @@ LPBYTE LDE::ResolveJump(_In_ const LPBYTE& lpSartAddress) {
 	return static_cast<BYTE*>(lpResult);
 }
 
-BYTE LDE::get_first_valid_instructions_size_hook(_Inout_ LPVOID *lpCodeBuffer, _Out_ LDE_HOOKING_STATE& state) {
+BYTE LDE::get_first_valid_instructions_size_hook(_Inout_ LPVOID&lpCodeBuffer, _Out_ LDE_HOOKING_STATE& state) {
 	if (!lpCodeBuffer) {
 		state.ecStatus = no_input;
 		return 0;
 	}
-	state.lpFuncAddr		  = *lpCodeBuffer;
-	BYTE *lpReference		  = static_cast<LPBYTE>(*lpCodeBuffer),
+	state.lpFuncAddr		  = lpCodeBuffer;
+	BYTE *lpReference		  = static_cast<LPBYTE>(lpCodeBuffer),
 		  cbAccumulatedLength = MapInstructionLen(lpReference, state);
 	if (!cbAccumulatedLength) {
 		state.ecStatus = wrong_input;
@@ -78,14 +78,14 @@ BYTE LDE::get_first_valid_instructions_size_hook(_Inout_ LPVOID *lpCodeBuffer, _
 	if (traceIntoIAT(state)) {
 		reset_hooking_contexts(state);
 		lpReference			= static_cast<LPBYTE>(state.lpFuncAddr);
-	   *lpCodeBuffer		= lpReference;
+	   lpCodeBuffer			= lpReference;
 		cbAccumulatedLength = 0;
 		if (!state.lpFuncAddr) {
 			return 0;
 		}
 	} else {
 		prepareForNextStep(state);
-		if (is_RIP_relative(state)) {
+		if (isRipRelativeCtx(state.curr_instruction_ctx)) {
 			state.rip_relative_indexes[state.cb_count_of_rip_indexes] = state.instructionCount;
 			state.cb_count_of_rip_indexes++;
 		}
@@ -94,13 +94,13 @@ BYTE LDE::get_first_valid_instructions_size_hook(_Inout_ LPVOID *lpCodeBuffer, _
 	while (cbAccumulatedLength < RELATIVE_TRAMPOLINE_SIZE && state.ecStatus == success) {
 		BYTE cbCurrentInstructionLength = MapInstructionLen(lpReference, state);
 		if (!cbCurrentInstructionLength) {
-			state.lpFuncAddr = analyse_redirecting_instruction(reinterpret_cast<DWORD&>(cbAccumulatedLength), state);
+			state.lpFuncAddr = analyse_redirecting_instruction(cbAccumulatedLength, state);
 			reset_hooking_contexts(state);
 			if (!state.lpFuncAddr) {
 				return 0;
 			}
 			lpReference			= static_cast<LPBYTE>(state.lpFuncAddr);
-			*lpCodeBuffer		= lpReference;
+			lpCodeBuffer		= lpReference;
 			cbAccumulatedLength = 0;
 			continue;
 		}
@@ -110,7 +110,7 @@ BYTE LDE::get_first_valid_instructions_size_hook(_Inout_ LPVOID *lpCodeBuffer, _
 			state.ecStatus = reached_end_of_function;
 			break;
 		}
-		if (is_RIP_relative(state)) {
+		if (isRipRelativeCtx(state.curr_instruction_ctx)) {
 			state.rip_relative_indexes[state.cb_count_of_rip_indexes] = state.instructionCount;
 			state.cb_count_of_rip_indexes++;
 		}
@@ -262,8 +262,7 @@ void LDE::logInstructionAndAddress(_In_ LPBYTE lpReferenceAddress, _In_ const ST
 	std::cout << "\n";
 }
 
-void LDE::logInstructionAndAddressCtx(_In_ const LPBYTE& lpReferenceAddress, _In_ const BYTE& CandidateContext, const BYTE& cbInstructionIndex) {
-
+void LDE::logInstructionAndAddressCtx(_In_ LPBYTE lpReferenceAddress, _In_ BYTE CandidateContext, BYTE cbInstructionIndex) {
 	std::cout << std::format("#{:3d} @{:P} ", cbInstructionIndex, reinterpret_cast<LPVOID>(lpReferenceAddress));
 	BYTE cbInstructionLen = GetInstructionLenCtx(CandidateContext);
 	for (BYTE i = 0; i < cbInstructionLen; i++) {
@@ -297,14 +296,12 @@ BOOLEAN LDE::find_n_fix_relocation(_Inout_ LPBYTE lpGateWayTrampoline, _In_ LPVO
 	return TRUE;
 }
 
-
 BOOLEAN LDE::isRexCtx(_In_ BYTE CandidateContext) {
 	return (CandidateContext & REX_MASK) >> 6;
 }
 
-template<typename STATE>
-BOOLEAN LDE::is_RIP_relative(_In_ const STATE& state) {
-	return (state.curr_instruction_ctx & RIP_RELATIVE_MASK) >> 7;
+BOOLEAN LDE::isRipRelativeCtx(_In_ const BYTE CandidateContext) {
+	return (CandidateContext & RIP_RELATIVE_MASK) >> 7;
 }
 
 BYTE LDE::GetInstructionLenCtx(_In_ BYTE ucCurrentInstruction_ctx) {
@@ -344,22 +341,11 @@ void LDE::incrementInstructionLen(_Inout_ BYTE& CandidateContext, _Inout_ lde_er
 	}
 }
 
-
 template<typename STATE>
 BYTE LDE::get_index_prefix_count(const BYTE ucIndex, STATE& state) {
 	if (ucIndex < state.instructionCount) { return state.prefixCountArray[ucIndex] & 0x0F; }
 	state.ecStatus = wrong_input;
 	return NULL;
-}
-
-template<typename STATE>
-void LDE::set_curr_opcode_len(_In_ BYTE cbOpcodeLength, _Inout_ STATE& lde_state) {
-	if (cbOpcodeLength < SIZE_OF_DWORD) {
-		lde_state.curr_instruction_ctx &= 0xFC;
-		lde_state.curr_instruction_ctx |= cbOpcodeLength - 1;
-	} else {
-		lde_state.ecStatus = opcode_overflow;
-	}
 }
 
 void LDE::incrementOpcodeLenCtx(BYTE& CandidateContext, lde_error_codes& StatusCode) {
@@ -387,20 +373,20 @@ BOOLEAN LDE::analyse_sib_base(_In_ BYTE cbCandidate) {
 }
 
 
-WORD LDE::analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE ucInstructionContext_ref) {
+WORD LDE::analyse_opcode_type(_In_ const LPBYTE lpCandidate_addr, _Inout_ BYTE& InstructionContext_ref) {
 	switch (*lpCandidate_addr)  {
 		case 0xC2: { return ret | _far; }
 		case 0xC3: { return ret; }
 		case 0xE8: {
-			SetCurrentContextRipRel(ucInstructionContext_ref);
+			SetCurrentContextRipRel(InstructionContext_ref);
 			return call;
 		}
 		case 0xE9: {
-			SetCurrentContextRipRel(ucInstructionContext_ref);
+			SetCurrentContextRipRel(InstructionContext_ref);
 			return jump;
 		}
 		case 0xEB: {
-			SetCurrentContextRipRel(ucInstructionContext_ref);
+			SetCurrentContextRipRel(InstructionContext_ref);
 			return jump | _short;
 		}
 		case 0x0F: {
@@ -411,7 +397,7 @@ WORD LDE::analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE 
 				case 0x35: { return sys_exit;  }
 				default:   {
 					if ((*(lpCandidate_addr + 1) & 0xF0) == 0x80) {
-						SetCurrentContextRipRel(ucInstructionContext_ref);
+						SetCurrentContextRipRel(InstructionContext_ref);
 						return conditional | jump;
 					}
 					break;
@@ -428,8 +414,9 @@ WORD LDE::analyse_opcode_type(_In_ const LPBYTE& lpCandidate_addr, _Inout_ BYTE 
 				case 4:  { return indirect_jump;	 }
 				case 5:  { return indirect_far_jump; }
 				case 6:  { return indirect_push;	 }
-				default: { return unknown;			 }
+				default: { return unknown; }
 			}
+			break;
 		}
 		default: {
 			if ((*lpCandidate_addr & 0xF0) == 0x70 || (*lpCandidate_addr & 0xFC) == 0xE0) {
