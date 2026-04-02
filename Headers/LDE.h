@@ -144,11 +144,11 @@ public:
 	static BYTE MapInstructionLen(_In_ const LPVOID& lpCodeBuffer, _Inout_ STATE& state) { using namespace std;
 		if (!lpCodeBuffer) {
 			state.ecStatus = no_input;
-			return NULL;
+			return 0;
 		}
 		if (*static_cast<LPBYTE>(lpCodeBuffer) == 0xCC) {
 			//cout << format("[!] Found Uninitialised memory @: {:#10X} Now Examining The Last instruction...\n", reinterpret_cast<DWORD64>(lpCodeBuffer));
-			return NULL;
+			return 0;
 		}
 		state.ecStatus			 = success;
 		LPBYTE lpReferenceBuffer = static_cast<LPBYTE>(lpCodeBuffer);
@@ -237,7 +237,7 @@ public:
 			state.prefixCountArray[state.instructionCount] += 1;
 			if (getCurrentPrefixCount(state) > 0x0E) {
 				state.ecStatus = prefix_overflow;
-				return NULL;
+				return 0;
 			}
 			if ((results[*lpReferenceBuffer] & 0xF0) == 0x40) { set_curr_ctx_bRex_w(state.curr_instruction_ctx); }
 			lpReferenceBuffer++;
@@ -246,7 +246,7 @@ public:
 		default: {
 			state.ecStatus = wrong_input;
 			cout << "[?] WTH Is Going On?\n";
-			return NULL;
+			return 0;
 		}
 		}
 		return GetInstructionLenCtx(state.curr_instruction_ctx);
@@ -315,7 +315,7 @@ private:
 	static BYTE analyse_special_group(_In_ LPBYTE lpCandidate, _Inout_ STATE& state) {
 		if (!lpCandidate) {
 			state.ecStatus = no_input;
-			return NULL;
+			return 0;
 		}
 		state.ecStatus = success;
 		switch (*lpCandidate) {
@@ -331,7 +331,7 @@ private:
 			case 0x06: 
 			case 0x08: 
 			case 0x09: 
-			case 0x0B: { return NULL; }
+			case 0x0B: { return 0; }
 			case 0x3A:
 			case 0xBA: {
 				incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
@@ -354,11 +354,11 @@ private:
 		BYTE cbRM				 = *lpCandidate & RM_MASK,
 			 cbReg				 = *lpCandidate & REG_MASK,
 		     cbMod				 = *lpCandidate & MOD_MASK,
-			 cb_added_opcode_len = NULL;
+			 cb_added_opcode_len = 0;
 		state.ecStatus = success;
 		if (!lpCandidate) {
 			state.ecStatus = no_input;
-			return NULL;
+			return 0;
 		}
 		switch (cbMod) {
 			case 0xC0: {
@@ -412,14 +412,14 @@ private:
 	static BYTE analyse_group3_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ STATE& state) {
 		if (!*lpCandidate) {
 			state.ecStatus = no_input;
-			return NULL;
+			return 0;
 		}
 		state.ecStatus = success;
 		BYTE ucReg				 = *(lpCandidate + SIZE_OF_BYTE) & REG_MASK,
 			 ucRM				 = *(lpCandidate + SIZE_OF_BYTE) & RM_MASK,
 			 ucMod				 = *(lpCandidate + SIZE_OF_BYTE) & MOD_MASK,
 			 uc_added_opcode_len = NULL,
-			 uc_added_imm_len	 = NULL;
+			 uc_added_imm_len	 = 0;
 		switch (*lpCandidate) {
 			case 0xF6: {
 				switch(ucMod) {
@@ -486,7 +486,7 @@ private:
 			}
 			default: {
 				state.ecStatus = wrong_input;
-				return NULL;
+				return 0;
 			}
 		}
 		return uc_added_opcode_len + uc_added_imm_len;
@@ -496,7 +496,7 @@ private:
 	static BYTE analyse_reg_size_0xF7(_In_ LPBYTE lpCandidate, _In_ STATE& state) {
 		if (!lpCandidate) {
 			state.ecStatus = no_input;
-			return NULL;
+			return 0;
 		}
 		state.ecStatus = success;
 		if (is_curr_instruction_shortened(getCurrentPrefixCount(state), lpCandidate)) {
@@ -507,8 +507,7 @@ private:
 	
 	static WORD analyse_opcode_type(_In_ LPBYTE lpCandidate_addr, _Inout_ BYTE& InstructionContext_ref);
 
-	template<typename STATE>
-	static LPBYTE analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Inout_ STATE& state);
+	static LPBYTE analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Inout_ LDE_HOOKING_STATE& state);
 
 	template<typename STATE>
 	static BYTE get_index_prefix_count(BYTE ucIndex, STATE& state);
@@ -516,7 +515,7 @@ private:
 	template<typename STATE>
 	static void prepareForNextStep(STATE& state){
 		state.contextsArray[state.instructionCount] = state.curr_instruction_ctx;
-		state.curr_instruction_ctx				    = NULL;
+		state.curr_instruction_ctx				    = 0;
 		state.instructionCount					   += 1;
 	}
 
