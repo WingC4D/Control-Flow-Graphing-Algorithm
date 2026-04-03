@@ -27,70 +27,70 @@ constexpr DWORD NEW_FUNCTIONS_BASE_SIZE = 0x00,
 				INVALID_BLOCK_INDEX		= 0xFFFFFFFF;
 
 struct NEW_BRANCH_PREREQ {
-	LPBYTE lpRoot;
-	DWORD  dwIndex,
-		   dwParentIdx,
-		   dwHeight;
+	LPBYTE root;
+	DWORD  index,
+		   parentIndex,
+		   height;
 
-	NEW_BRANCH_PREREQ(LPBYTE lpCandidate, DWORD dwNewBranchIndex, DWORD dwParentBranchIndex, DWORD dwNewBranchHeight):
-	lpRoot(lpCandidate),
-	dwIndex(dwNewBranchIndex),
-	dwParentIdx(dwParentBranchIndex),
-	dwHeight(dwNewBranchHeight) {
+	NEW_BRANCH_PREREQ(LPBYTE candidate_address, DWORD new_index, DWORD parent_index, DWORD height):
+	root(candidate_address),
+	index(new_index),
+	parentIndex(parent_index),
+	height(height) {
 	}
 };
 
-struct BLOCK_LANDMARKS { 
-	const BYTE* lpRoot;
-	BYTE *lpEnd;
+struct BlockLandmarks { 
+	BYTE* const root;
+	BYTE *end;
 
-	BLOCK_LANDMARKS(LPBYTE lpRootAddress, LPBYTE lpEndAddress):
-	lpRoot(lpRootAddress),
-	lpEnd(lpEndAddress){
+	BlockLandmarks(LPBYTE root_address, LPBYTE end_address = nullptr):
+	root(root_address),
+	end(end_address){
 	}
-	const BYTE* getRoot() const {
-		return lpRoot;
+	BYTE* getRoot() const {
+		return root;
 	}
 };
 
 struct BLOCK {
-	std::unique_ptr<BLOCK_LANDMARKS> lpLandmarks;
-	DWORD							 dwIndex;
-	DWORD							 dwHeight;
-	std::unique_ptr<LdeState>		 ldeState;
-	std::vector<DWORD>				 flowFromVec;
-	std::vector<DWORD>				 flowToVec;
+	std::unique_ptr<BlockLandmarks> landmarksPtr;
+	DWORD							idx;
+	DWORD							height;
+	std::unique_ptr<LdeState>		ldeState;
+	std::vector<DWORD>				flowFromVec;
+	std::vector<DWORD>				flowToVec;
 
 
 
-	BLOCK(LPBYTE lpStartAddress, DWORD dwParentIdx, DWORD dwBranchIdx, DWORD dwBranchHeight):
-	lpLandmarks(std::make_unique<BLOCK_LANDMARKS>(lpStartAddress, nullptr)),
-	ldeState(std::make_unique<LdeState>()), flowFromVec(0), flowToVec(0) {
-		dwIndex  = dwBranchIdx;
-		dwHeight = dwBranchHeight;
-		if (dwParentIdx != 0xFFFFFFFF) {
-			flowFromVec.emplace_back(dwParentIdx);
+	BLOCK(LPBYTE root_address, DWORD parent_index, DWORD index, DWORD height_):
+	landmarksPtr(std::make_unique<BlockLandmarks>(root_address)), ldeState(std::make_unique<LdeState>()),
+	flowFromVec(0), flowToVec(0) {
+		idx    = index;
+		height = height_;
+		if (parent_index != 0xFFFFFFFF) {
+			flowFromVec.emplace_back(parent_index);
 		}
 	}
 	void print() const; 
 
 	void logIndex() const;
 
-	void findNewEnd(LPBYTE lpInterlacingRoot) const;
+	void findNewEnd(LPBYTE interlacing_root_ptr) const;
 
-	BOOLEAN isInstructionHead(LPBYTE lpCandidate) const;
+	BOOLEAN isInstructionHead(LPBYTE candidate_address) const;
 
-	IsNewBranch trace(std::vector<BYTE*>& NewFunctionsVec);
+	IsNewBranch trace(std::vector<LPBYTE>& NewFunctionsVec);
 
-	IsNewBranch TraceUntil(std::vector<BYTE*>& NewFunctionsVec, const unsigned char * until_address);
+	IsNewBranch TraceUntil(std::vector<LPBYTE>& NewFunctionsVec, LPBYTE until_address);
 
-	inline BOOLEAN isInRange(LPBYTE CandidateLandmarks_t) const;
+	BOOLEAN isInRange(LPBYTE candidate_address) const;
 
-	inline DWORD getIndex(void) const;
+	inline DWORD getIndex() const;
 	
-	inline void resize(BYTE sNewSize, LPBYTE lpNewEndAddress) const;
+	inline void resize(BYTE new_size, LPBYTE new_end_address) const;
 
-	void handleEndOfTrace(LPBYTE lpCurrentAddress, LdeState& state);
+	void handleEndOfTrace(LPBYTE current_address, LdeState& State);
 
 	inline static void addResolvedCall(std::vector<LPBYTE>& NewFunctionVec, LPBYTE resolved_address);
 
@@ -124,25 +124,22 @@ struct FunctionTree {
 
 	std::vector<std::unique_ptr<BLOCK>> blocksVec;
 	std::vector<BYTE*> newFunctionsVec;
-	const LPBYTE lpRoot;
-	std::vector<DWORD>vLeafs;
-	DWORD dwNewFunctionsCount;
+	const LPBYTE root;
+	std::vector<DWORD>leavesVec;
 
 	FunctionTree(const LPBYTE& lpFunctionRoot):
 	blocksVec(0),
 	newFunctionsVec(NEW_FUNCTIONS_BASE_SIZE),
-	lpRoot(lpFunctionRoot),
-	vLeafs(NULL) {
-		using namespace std;
-		blocksVec.emplace_back(make_unique<BLOCK>(lpFunctionRoot, 0xFFFFFFFF, 0, 0));
-		dwNewFunctionsCount = 0;
+	root(lpFunctionRoot),
+	leavesVec(NULL) {
+		blocksVec.emplace_back(std::make_unique<BLOCK>(lpFunctionRoot, 0xFFFFFFFF, 0, 0));
 	}
 
 	ErrorCode Trace();
 
-	inline BOOLEAN splitBlock(BLOCK& SplitBlock, LPBYTE lpSplittingAddress, std::map<BYTE*, BLOCK*>& RootsMap);
+	inline BOOLEAN splitBlock(BLOCK& SplitBlock, LPBYTE splitting_address, std::map<BYTE*, BLOCK*>& RootsMap);
 
-	AddBlock addBlock(LPBYTE lpToAdd, DWORD dwIndex, DWORD dwParentIndex, DWORD dwHeight, std::map<BYTE*, BLOCK*>& RootsMap);
+	AddBlock addBlock(LPBYTE address_to_add, DWORD new_block_index, DWORD parent_index, DWORD height, std::map<BYTE*, BLOCK*>& RootsMap);
 
 	void transferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewParentBlock) const;
 

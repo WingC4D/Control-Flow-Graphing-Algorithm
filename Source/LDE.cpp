@@ -12,12 +12,12 @@ BYTE Lde::mapInstructionLength(LPVOID analysis_address, BYTE& InstructionContext
 		return 0;
 	}
 	status = success;
-	BYTE* lpReferenceBuffer = static_cast<LPBYTE>(analysis_address);
+	BYTE* reference_address = static_cast<LPBYTE>(analysis_address);
 
 	incrementInstructionLen(InstructionContext, status);
-	switch (results[*lpReferenceBuffer]) {
+	switch (results[*reference_address]) {
 	case none: {
-		if (*lpReferenceBuffer == 0xC3 || *lpReferenceBuffer == 0xC2) {
+		if (*reference_address == 0xC3 || *reference_address == 0xC2) {
 			status = reached_end_of_function;
 		}
 		setCurrentInstructionLength(prefix_count + getOpcodeLenCtx(InstructionContext), InstructionContext);
@@ -25,41 +25,41 @@ BYTE Lde::mapInstructionLength(LPVOID analysis_address, BYTE& InstructionContext
 	}
 	case has_mod_rm: {
 		incrementOpcodeLenCtx(InstructionContext, status);
-		setCurrentInstructionLength(prefix_count + getOpcodeLenCtx(InstructionContext) + analyse_mod_rm(lpReferenceBuffer + 1, InstructionContext, status), InstructionContext);
+		setCurrentInstructionLength(prefix_count + getOpcodeLenCtx(InstructionContext) + analyse_mod_rm(reference_address + 1, InstructionContext, status), InstructionContext);
 		break;
 	}
 	case has_mod_rm | prefix: {
 		incrementOpcodeLenCtx(InstructionContext, status);
-		setCurrentInstructionLength(prefix_count + getOpcodeLenCtx(InstructionContext) + analyse_special_group(lpReferenceBuffer + 1, InstructionContext, status), InstructionContext);
+		setCurrentInstructionLength(prefix_count + getOpcodeLenCtx(InstructionContext) + analyse_special_group(reference_address + 1, InstructionContext, status), InstructionContext);
 		break;
 	}
 	case has_mod_rm | special: {
 		incrementOpcodeLenCtx(InstructionContext, status);
-		setCurrentInstructionLength(prefix_count + getOpcodeLenCtx(InstructionContext) + analyse_group3_mod_rm(lpReferenceBuffer, InstructionContext, status, prefix_count), InstructionContext);
+		setCurrentInstructionLength(prefix_count + getOpcodeLenCtx(InstructionContext) + analyse_group3_mod_rm(reference_address, InstructionContext, status, prefix_count), InstructionContext);
 		break;
 	}
 	case has_mod_rm | imm_one_byte: {
 		incrementOpcodeLenCtx(InstructionContext, status);
-		setCurrentInstructionLength(prefix_count + SIZE_OF_BYTE + getOpcodeLenCtx(InstructionContext) + analyse_mod_rm(lpReferenceBuffer + 1, InstructionContext, status), InstructionContext);
+		setCurrentInstructionLength(prefix_count + SIZE_OF_BYTE + getOpcodeLenCtx(InstructionContext) + analyse_mod_rm(reference_address + 1, InstructionContext, status), InstructionContext);
 		break;
 	}
 	case has_mod_rm | imm_two_bytes: {
 		incrementOpcodeLenCtx(InstructionContext, status);
-		setCurrentInstructionLength(prefix_count + SIZE_OF_WORD + getOpcodeLenCtx(InstructionContext) + analyse_mod_rm(lpReferenceBuffer + 1, InstructionContext, status), InstructionContext);
+		setCurrentInstructionLength(prefix_count + SIZE_OF_WORD + getOpcodeLenCtx(InstructionContext) + analyse_mod_rm(reference_address + 1, InstructionContext, status), InstructionContext);
 		break;
 	}
 	case has_mod_rm | imm_four_bytes: {
 		incrementOpcodeLenCtx(InstructionContext, status);
-		setCurrentInstructionLength(prefix_count + SIZE_OF_DWORD + getOpcodeLenCtx(InstructionContext) + analyse_mod_rm(lpReferenceBuffer + 1, InstructionContext, status), InstructionContext);
+		setCurrentInstructionLength(prefix_count + SIZE_OF_DWORD + getOpcodeLenCtx(InstructionContext) + analyse_mod_rm(reference_address + 1, InstructionContext, status), InstructionContext);
 		break;
 	}
 	case has_mod_rm | imm_eight_bytes: {
 		incrementOpcodeLenCtx(InstructionContext, status);
-		setCurrentInstructionLength(prefix_count + SIZE_OF_QWORD + getOpcodeLenCtx(InstructionContext) + analyse_mod_rm(lpReferenceBuffer + 1, InstructionContext, status), InstructionContext);
+		setCurrentInstructionLength(prefix_count + SIZE_OF_QWORD + getOpcodeLenCtx(InstructionContext) + analyse_mod_rm(reference_address + 1, InstructionContext, status), InstructionContext);
 		break;
 	}
 	case has_mod_rm | imm_eight_bytes | imm_four_bytes: {
-		std::cout << std::format("[x] You don't handle yet has_mod_rm | imm_eight_bytes | imm_four_bytes, (Found @{:p})\n", reinterpret_cast<void*>(lpReferenceBuffer));
+		std::cout << std::format("[x] You don't handle yet has_mod_rm | imm_eight_bytes | imm_four_bytes, (Found @{:p})\n", reinterpret_cast<void*>(reference_address));
 		break;
 	}
 	case imm_one_byte: {
@@ -79,9 +79,9 @@ BYTE Lde::mapInstructionLength(LPVOID analysis_address, BYTE& InstructionContext
 		break;
 	}
 	case imm_four_bytes | imm_eight_bytes: {
-		if (*lpReferenceBuffer == 0xE8 || *lpReferenceBuffer == 0xE9) {
+		if (*reference_address == 0xE8 || *reference_address == 0xE9) {
 			setContextRipRel(InstructionContext);
-			if (!isCurrentInstructionShortened(prefix_count, lpReferenceBuffer)) {
+			if (!isCurrentInstructionShortened(prefix_count, reference_address)) {
 				setCurrentInstructionLength(prefix_count + getOpcodeLenCtx(InstructionContext) + SIZE_OF_DWORD, InstructionContext);
 			}
 			else {
@@ -89,7 +89,7 @@ BYTE Lde::mapInstructionLength(LPVOID analysis_address, BYTE& InstructionContext
 			}
 		}
 		else if (isRexCtx(InstructionContext)) {
-			if (*(lpReferenceBuffer - (getOpcodeLenCtx(InstructionContext) - SIZE_OF_BYTE)) & 0x48) {
+			if (*(reference_address - (getOpcodeLenCtx(InstructionContext) - SIZE_OF_BYTE)) & 0x48) {
 				setCurrentInstructionLength(getOpcodeLenCtx(InstructionContext) + prefix_count + SIZE_OF_QWORD, InstructionContext);
 				break;
 			}
@@ -103,10 +103,10 @@ BYTE Lde::mapInstructionLength(LPVOID analysis_address, BYTE& InstructionContext
 			status = prefix_overflow;
 			return 0;
 		}
-		if ((results[*lpReferenceBuffer] & 0xF0) == 0x48) {
+		if ((results[*reference_address] & 0xF0) == 0x48) {
 			set_curr_ctx_bRex_w(InstructionContext);
 		}
-		return mapInstructionLength(lpReferenceBuffer + 1, InstructionContext, status, prefix_count);
+		return mapInstructionLength(reference_address + 1, InstructionContext, status, prefix_count);
 	}
 	default: {
 		status = wrong_input;
@@ -158,8 +158,6 @@ BYTE Lde::analyse_special_group(LPBYTE candidate_address, BYTE& InstructionConte
 	}
 	return SIZE_OF_BYTE + analyse_mod_rm(candidate_address + SIZE_OF_BYTE, InstructionContext, status);
 }
-
-
 
 LPBYTE Lde::resolveJump(_In_ LPBYTE to_resolve_address) {
 	LdeJumpResolutionState State(to_resolve_address);
@@ -525,8 +523,6 @@ void Lde::setCurrentInstructionLength(_In_ BYTE instruction_length, _Inout_ BYTE
 BOOLEAN Lde::analyseSibBase(_In_ const BYTE candidate) {
 	return (candidate & 0x07) == 5;
 }
-
-
 
 WORD Lde::analyseOpcodeType(_In_ const LPBYTE candidate_addr, _Inout_ BYTE& InstructionContext) {
 	switch (*candidate_addr)  {
