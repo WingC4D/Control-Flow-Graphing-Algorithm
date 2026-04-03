@@ -5,12 +5,21 @@
 #include <memory>
 #include<iostream>
 #include <print>
-#include "LDE.h"
+#include "Lde.h"
 
-enum IS_NEW_BRANCH: BYTE;
-class  LDE;
-struct LDE_STATE;
+
+class  Lde;
+struct LdeState;
+enum IsNewBranch : BYTE {
+	no,
+	no_reached_ret,
+	yes_reached_conditional_branch,
+	yes_reached_non_conditional_branch,
+	yes_is_call,
+	algorithm_failed
+};
 constexpr DWORD NEW_FUNCTIONS_BASE_SIZE = 0x00,
+
 			    ENDS_UNCOND_JUMP		= 0x20000000,
 				COND_BLOCK_MASK		    = 0X80000000,
 				C_JUMP_TAKEN_MASK		= 0X40000000,
@@ -31,28 +40,32 @@ struct NEW_BRANCH_PREREQ {
 	}
 };
 
-struct BLOCK_LANDMARKS {
+struct BLOCK_LANDMARKS { 
 	const BYTE* lpRoot;
-	BYTE* lpEnd;
+	BYTE *lpEnd;
 
 	BLOCK_LANDMARKS(LPBYTE lpRootAddress, LPBYTE lpEndAddress):
 	lpRoot(lpRootAddress),
 	lpEnd(lpEndAddress){
 	}
-
+	const BYTE* getRoot() const {
+		return lpRoot;
+	}
 };
 
 struct BLOCK {
 	std::unique_ptr<BLOCK_LANDMARKS> lpLandmarks;
 	DWORD							 dwIndex;
 	DWORD							 dwHeight;
-	std::unique_ptr<LDE_STATE>		 ldeState;
+	std::unique_ptr<LdeState>		 ldeState;
 	std::vector<DWORD>				 flowFromVec;
 	std::vector<DWORD>				 flowToVec;
 
+
+
 	BLOCK(LPBYTE lpStartAddress, DWORD dwParentIdx, DWORD dwBranchIdx, DWORD dwBranchHeight):
 	lpLandmarks(std::make_unique<BLOCK_LANDMARKS>(lpStartAddress, nullptr)),
-	ldeState(std::make_unique<LDE_STATE>()), flowFromVec(0), flowToVec(0) {
+	ldeState(std::make_unique<LdeState>()), flowFromVec(0), flowToVec(0) {
 		dwIndex  = dwBranchIdx;
 		dwHeight = dwBranchHeight;
 		if (dwParentIdx != 0xFFFFFFFF) {
@@ -67,9 +80,9 @@ struct BLOCK {
 
 	BOOLEAN isInstructionHead(LPBYTE lpCandidate) const;
 
-	IS_NEW_BRANCH Trace(std::vector<BYTE*>& NewFunctionsVec);
+	IsNewBranch trace(std::vector<BYTE*>& NewFunctionsVec);
 
-	IS_NEW_BRANCH TraceUntil(std::vector<BYTE*>& vNewFunctionsVec, LPBYTE lpUntilAddress);
+	IsNewBranch TraceUntil(std::vector<BYTE*>& NewFunctionsVec, const unsigned char * until_address);
 
 	inline BOOLEAN isInRange(LPBYTE CandidateLandmarks_t) const;
 
@@ -77,33 +90,33 @@ struct BLOCK {
 	
 	inline void resize(BYTE sNewSize, LPBYTE lpNewEndAddress) const;
 
-	inline void handleEndOfTrace(LPBYTE lpCurrentAddress, LDE_STATE& state);
+	void handleEndOfTrace(LPBYTE lpCurrentAddress, LdeState& state);
 
-	inline static void addResolvedCall(std::vector<LPBYTE>& NewFunctionVec, LPBYTE lpResolvedAddress);
+	inline static void addResolvedCall(std::vector<LPBYTE>& NewFunctionVec, LPBYTE resolved_address);
 
 };
 
-enum add_block: BYTE {
+enum AddBlock: BYTE {
 	was_traced = 0,
 	added	   = 1,
 	split	   = 2
 };
 
-struct FUNCTION_TREE_TRACE_CTX {
+struct FunctionTreeTraceCtx {
 	std::map<BYTE*, BLOCK*>& rootsMap;
 	BLOCK&				     currentBlock;
 	std::vector<DWORD>&		 explorationVec;
 	
 };
 
-struct CONDITIONAL_JUMP_CTX {
+struct ConditionalJumpCtx {
 	LPBYTE  lpShallowAddress,
 	        lpDeepAddress;
 	DWORD	dwShallowIndex,
 			dwDeepIndex;
 };
 
-struct FUNCTION_TREE {
+struct FunctionTree {
 	enum ErrorCode: BYTE {
 		success,
 		failed
@@ -115,7 +128,7 @@ struct FUNCTION_TREE {
 	std::vector<DWORD>vLeafs;
 	DWORD dwNewFunctionsCount;
 
-	FUNCTION_TREE(const LPBYTE& lpFunctionRoot):
+	FunctionTree(const LPBYTE& lpFunctionRoot):
 	blocksVec(0),
 	newFunctionsVec(NEW_FUNCTIONS_BASE_SIZE),
 	lpRoot(lpFunctionRoot),
@@ -129,15 +142,15 @@ struct FUNCTION_TREE {
 
 	inline BOOLEAN splitBlock(BLOCK& SplitBlock, LPBYTE lpSplittingAddress, std::map<BYTE*, BLOCK*>& RootsMap);
 
-	add_block addBlock(LPBYTE lpToAdd, DWORD dwIndex, DWORD dwParentIndex, DWORD dwHeight, std::map<BYTE*, BLOCK*>& RootsMap);
+	AddBlock addBlock(LPBYTE lpToAdd, DWORD dwIndex, DWORD dwParentIndex, DWORD dwHeight, std::map<BYTE*, BLOCK*>& RootsMap);
 
-	void TransferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewParentBlock) const;
+	void transferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewParentBlock) const;
 
 	inline BOOLEAN checkIfTraced(BLOCK& JustTracedBlock, std::map<BYTE*, BLOCK*>& RootsMap) const;
 
-	void handleJump(LPBYTE lpResolvedJump, DWORD dwNewBlockIndex, const FUNCTION_TREE_TRACE_CTX& TraceContext);
+	void handleJump(LPBYTE resolved_address, DWORD new_block_idx, const FunctionTreeTraceCtx& TraceContext);
 
-	void Print() {
+	void print() {
 		for (std::unique_ptr<BLOCK>& block: blocksVec) {
 			block->logIndex();
 			block->print();
