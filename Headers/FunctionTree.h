@@ -53,7 +53,7 @@ struct BlockLandmarks {
 	}
 };
 
-struct BLOCK {
+struct Block {
 	std::unique_ptr<BlockLandmarks> landmarksPtr;
 	DWORD							idx;
 	DWORD							height;
@@ -63,7 +63,7 @@ struct BLOCK {
 
 
 
-	BLOCK(LPBYTE root_address, DWORD parent_index, DWORD index, DWORD height_):
+	Block(LPBYTE root_address, DWORD parent_index, DWORD index, DWORD height_):
 	landmarksPtr(std::make_unique<BlockLandmarks>(root_address)), ldeState(std::make_unique<LdeState>()),
 	flowFromVec(0), flowToVec(0) {
 		idx    = index;
@@ -103,8 +103,8 @@ enum AddBlock: BYTE {
 };
 
 struct FunctionTreeTraceCtx {
-	std::map<BYTE*, BLOCK*>& rootsMap;
-	BLOCK&				     currentBlock;
+	std::map<BYTE*, Block*>& rootsMap;
+	Block&				     currentBlock;
 	std::vector<DWORD>&		 explorationVec;
 	
 };
@@ -122,7 +122,7 @@ struct FunctionTree {
 		failed
 	};
 
-	std::vector<std::unique_ptr<BLOCK>> blocksVec;
+	std::vector<std::unique_ptr<Block>> blocksVec;
 	std::vector<BYTE*> newFunctionsVec;
 	const LPBYTE root;
 	std::vector<DWORD>leavesVec;
@@ -132,23 +132,23 @@ struct FunctionTree {
 	newFunctionsVec(NEW_FUNCTIONS_BASE_SIZE),
 	root(lpFunctionRoot),
 	leavesVec(NULL) {
-		blocksVec.emplace_back(std::make_unique<BLOCK>(lpFunctionRoot, 0xFFFFFFFF, 0, 0));
+		blocksVec.emplace_back(std::make_unique<Block>(lpFunctionRoot, 0xFFFFFFFF, 0, 0));
 	}
 
 	ErrorCode Trace();
 
-	inline BOOLEAN splitBlock(BLOCK& SplitBlock, LPBYTE splitting_address, std::map<BYTE*, BLOCK*>& RootsMap);
+	inline BOOLEAN splitBlock(Block& BlockToSplit, LPBYTE splitting_address, std::map<BYTE*, Block*>& RootsMap);
 
-	AddBlock addBlock(LPBYTE address_to_add, DWORD new_block_index, DWORD parent_index, DWORD height, std::map<BYTE*, BLOCK*>& RootsMap);
+	AddBlock addBlock(LPBYTE address_to_add, DWORD new_block_index, DWORD parent_index, DWORD height, std::map<BYTE*, Block*>& RootsMap);
 
-	void transferUniqueChildren(BLOCK& OldParentBlock, BLOCK& NewParentBlock) const;
+	void transferUniqueChildren(Block& OldParentBlock, Block& NewParentBlock) const;
 
-	inline BOOLEAN checkIfTraced(BLOCK& JustTracedBlock, std::map<BYTE*, BLOCK*>& RootsMap) const;
+	inline BOOLEAN checkIfTraced(Block& JustTracedBlock, std::map<BYTE*, Block*>& RootsMap) const;
 
 	void handleJump(LPBYTE resolved_address, DWORD new_block_idx, const FunctionTreeTraceCtx& TraceContext);
 
 	void print() {
-		for (std::unique_ptr<BLOCK>& block: blocksVec) {
+		for (std::unique_ptr<Block>& block: blocksVec) {
 			block->logIndex();
 			block->print();
 			std::println();

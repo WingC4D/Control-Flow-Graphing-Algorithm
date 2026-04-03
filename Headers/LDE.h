@@ -22,7 +22,7 @@
 
 enum IsNewBranch: BYTE;
 struct FunctionTree;
-struct BLOCK;
+struct Block;
 struct CONDITIONAL_BRANCH;
 constexpr BYTE SIZE_OF_BYTE					 = 0x01,
                SIZE_OF_WORD					 = 0x02,
@@ -125,7 +125,7 @@ enum state: BYTE {
 	branch_is_obfuscated
 };
 
-class Lde { friend FunctionTree; friend  BLOCK;
+class Lde { friend FunctionTree; friend  Block;
 
 	static BYTE getValidInstructionsSizeHook(_Inout_ LPVOID& target_address, _Out_ LdeHookingState& State);
 
