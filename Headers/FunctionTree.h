@@ -3,7 +3,8 @@
 #include <map>
 #include <vector>
 #include <memory>
-#include <iostream>
+#include<iostream>
+#include <print>
 #include "LDE.h"
 
 enum IS_NEW_BRANCH: BYTE;
@@ -136,11 +137,11 @@ struct FUNCTION_TREE {
 
 	void handleJump(LPBYTE lpResolvedJump, DWORD dwNewBlockIndex, const FUNCTION_TREE_TRACE_CTX& TraceContext);
 
-	void Print() { using namespace std;
-		for (unique_ptr<BLOCK>& block: blocksVec) {
+	void Print() {
+		for (std::unique_ptr<BLOCK>& block: blocksVec) {
 			block->logIndex();
 			block->print();
-			cout << '\n';
+			std::println();
 		}
 	}
 };

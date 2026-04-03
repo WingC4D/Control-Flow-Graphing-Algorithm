@@ -1,8 +1,5 @@
 #pragma once
 #include <Windows.h>
-#include <deque>
-#include <iostream>
-#include <format>
 #include "FunctionTree.h"
 #ifndef hUINT
 	#define LOCAL_PROCESS_HANDLE reinterpret_cast<HANDLE>(-1)
@@ -16,6 +13,7 @@
 		#define TRAMPOLINE_SIZE 0x100
 	#elifdef _M_X64
 		typedef unsigned long long hkUINT;
+		constexpr DWORD TWO_GIGABYTES = 0x80000000;
 		#define hUINT
 		#define TRAMPOLINE_SIZE 0x0D
 		#define MAX_INSTRUCTION_SIZE 0x0F
@@ -42,6 +40,8 @@ constexpr BYTE SIZE_OF_BYTE		 = 0x01,
                CONDITIONALS_MASK = 0x80,
                DISPOSITIONS_MASK = 0x30,
                ROOT_BRANCH_INSTRUCTION_COUNT = 0xA0;
+
+
 
 enum Register: BYTE {
 	ax, bx, cx, dx,sp, bp, si, di
@@ -74,7 +74,9 @@ struct LDE_HOOKING_STATE {
 					contextsArray[RELATIVE_TRAMPOLINE_SIZE]{ },
 					prefixCountArray[RELATIVE_TRAMPOLINE_SIZE]{ },
 					rip_relative_indexes[RELATIVE_TRAMPOLINE_SIZE]{ };
-
+	inline BYTE getCurrentPrefixCount() const {
+		return static_cast<char>(prefixCountArray[instructionCount] & 0x0F);
+	}
 	LDE_HOOKING_STATE(LPVOID lpTarget): lpFuncAddr(lpTarget) {
 	}
 };
@@ -94,6 +96,9 @@ struct LDE_STATE {
 		instructionCount		 = 0;
 		cb_count_of_branches	 = 0;
 	}
+	inline BYTE getCurrentPrefixCount() const {
+		return static_cast<char>(prefixCountArray[instructionCount] & 0x0F);
+	}
 };
 
 struct LDE_JUMP_RESOLUTION_STATE {
@@ -105,8 +110,11 @@ struct LDE_JUMP_RESOLUTION_STATE {
 					contextsArray[1]		= { },
 					prefixCountArray[1]		= { },
 					rip_relative_indexes[1] = { };
-
+	
 	LDE_JUMP_RESOLUTION_STATE(LPVOID lpTarget): lpFuncAddr(lpTarget) {
+	}
+	inline BYTE getCurrentPrefixCount() const {
+		return static_cast<char>(prefixCountArray[instructionCount] & 0x0F);
 	}
 };
 
@@ -126,9 +134,7 @@ enum IS_NEW_BRANCH: unsigned char {
 	};
 
 
-class LDE {
-public:
-	friend FUNCTION_TREE; friend  BLOCK;
+class LDE { friend FUNCTION_TREE; friend  BLOCK;
 
 	static BYTE get_first_valid_instructions_size_hook(_Inout_ LPVOID& lpCodeBuffer, _Out_ LDE_HOOKING_STATE& state);
 
@@ -136,126 +142,11 @@ public:
 
 	static LPBYTE ResolveJump(_In_ LPBYTE lpSartAddress);
 
-	static IS_NEW_BRANCH checkForNewBlock(LDE_STATE& state, const LPBYTE& lpReference);
+	static IS_NEW_BRANCH checkForNewBlock(LDE_STATE& state, LPBYTE lpReference);
 
 	inline static BYTE GetInstructionLenCtx(_In_ BYTE ucCurrentInstruction_ctx);
 
-	template<typename STATE>
-	static BYTE MapInstructionLen(_In_ const LPVOID& lpCodeBuffer, _Inout_ STATE& state) { using namespace std;
-		if (!lpCodeBuffer) {
-			state.ecStatus = no_input;
-			return 0;
-		}
-		if (*static_cast<LPBYTE>(lpCodeBuffer) == 0xCC) {
-			//cout << format("[!] Found Uninitialised memory @: {:#10X} Now Examining The Last instruction...\n", reinterpret_cast<DWORD64>(lpCodeBuffer));
-			return 0;
-		}
-		state.ecStatus			 = success;
-		LPBYTE lpReferenceBuffer = static_cast<LPBYTE>(lpCodeBuffer);
-		incrementInstructionLen(state.curr_instruction_ctx, state.ecStatus);
-		switch (results[*lpReferenceBuffer]) {
-		case none: {
-			if (*lpReferenceBuffer == 0xC3 || *lpReferenceBuffer == 0xC2) { state.ecStatus = reached_end_of_function; }
-			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx), state.curr_instruction_ctx);
-			break;
-		}
-		case has_mod_rm: {
-			incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
-			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state.curr_instruction_ctx);
-			break;
-		}
-		case has_mod_rm | prefix: {
-			incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
-			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_special_group(lpReferenceBuffer + 1, state), state.curr_instruction_ctx);
-			break;
-		}
-		case has_mod_rm | special: {
-			incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
-			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_group3_mod_rm(lpReferenceBuffer, state), state.curr_instruction_ctx);
-			break;
-		}
-		case has_mod_rm | imm_one_byte: {
-			incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
-			set_curr_inst_len(getCurrentPrefixCount(state) + SIZE_OF_BYTE + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state.curr_instruction_ctx);
-			break;
-		}
-		case has_mod_rm | imm_two_bytes: {
-			incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
-			set_curr_inst_len(getCurrentPrefixCount(state) + SIZE_OF_WORD + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state.curr_instruction_ctx);
-			break;
-		}
-		case has_mod_rm | imm_four_bytes: {
-			incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
-			set_curr_inst_len(getCurrentPrefixCount(state) + SIZE_OF_DWORD + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state.curr_instruction_ctx);
-			break;
-		}
-		case has_mod_rm | imm_eight_bytes: {
-			incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
-			set_curr_inst_len(getCurrentPrefixCount(state) + SIZE_OF_QWORD + getOpcodeLenCtx(state.curr_instruction_ctx) + analyse_mod_rm(lpReferenceBuffer + 1, state), state.curr_instruction_ctx);
-			break;
-		}
-		case has_mod_rm | imm_eight_bytes | imm_four_bytes: {
-			cout << "[x] You don't handle yet has_mod_rm | imm_eight_bytes | imm_four_bytes, (Found @" << format("{:#x})\n", *lpReferenceBuffer);
-			break;
-		}
-		case imm_one_byte: {
-			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + SIZE_OF_BYTE, state.curr_instruction_ctx);
-			break;
-		}
-		case imm_two_bytes: {
-			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + SIZE_OF_WORD, state.curr_instruction_ctx);
-			break;
-		}
-		case imm_four_bytes: {
-			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + SIZE_OF_DWORD, state.curr_instruction_ctx);
-			break;
-		}
-		case imm_eight_bytes: {
-			set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + SIZE_OF_QWORD, state.curr_instruction_ctx);
-			break;
-		}
-		case imm_four_bytes | imm_eight_bytes: {
-			if (*lpReferenceBuffer == 0xE8 || *lpReferenceBuffer == 0xE9) {
-				SetCurrentContextRipRel(state.curr_instruction_ctx);
-				if (!is_curr_instruction_shortened(getCurrentPrefixCount(state), lpReferenceBuffer)) {
-					set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + SIZE_OF_DWORD, state.curr_instruction_ctx);
-				}
-				else {
-					set_curr_inst_len(getCurrentPrefixCount(state) + getOpcodeLenCtx(state.curr_instruction_ctx) + SIZE_OF_WORD, state.curr_instruction_ctx);
-				}
-			}
-			else if (isRexCtx(state.curr_instruction_ctx)) {
-				if (*(lpReferenceBuffer - (getOpcodeLenCtx(state.curr_instruction_ctx) - SIZE_OF_BYTE)) & 0x48) {
-					set_curr_inst_len(getOpcodeLenCtx(state.curr_instruction_ctx) + getCurrentPrefixCount(state) + SIZE_OF_QWORD, state.curr_instruction_ctx);
-					break;
-				}
-			}
-			set_curr_inst_len(getOpcodeLenCtx(state.curr_instruction_ctx) + getCurrentPrefixCount(state) + SIZE_OF_DWORD, state.curr_instruction_ctx);
-			break;
-		}
-		case prefix: {
-			state.prefixCountArray[state.instructionCount] += 1;
-			if (getCurrentPrefixCount(state) > 0x0E) {
-				state.ecStatus = prefix_overflow;
-				return 0;
-			}
-			if ((results[*lpReferenceBuffer] & 0xF0) == 0x40) { set_curr_ctx_bRex_w(state.curr_instruction_ctx); }
-			lpReferenceBuffer++;
-			return MapInstructionLen(lpReferenceBuffer, state);
-		}
-		default: {
-			state.ecStatus = wrong_input;
-			cout << "[?] WTH Is Going On?\n";
-			return 0;
-		}
-		}
-		return GetInstructionLenCtx(state.curr_instruction_ctx);
-	}
-
-	template<typename STATE>
-	static BYTE getCurrentPrefixCount(STATE& state) {
-		return state.prefixCountArray[state.instructionCount] & 0x0F;
-	}
+	static BYTE mapInstructionLen(_In_ LPVOID lpCodeBuffer, _Inout_ BYTE& InstructionContext, _Inout_ lde_error_codes& status, _Inout_ BYTE& prefix_count);
 
 private:
 	enum first_byte_traits: BYTE {
@@ -296,11 +187,10 @@ private:
 
 	inline static BOOLEAN isRipRelativeCtx(_In_ BYTE CandidateContext);
 
-	template<typename STATE>
-	static BYTE get_index_ctx_inst_len(_In_ BYTE cbIndex, _Inout_ const STATE& state);
 
-	template<typename STATE>
-	static BYTE get_index_opcode_len(_In_ BYTE cbIndex, _In_ const STATE& state);
+	static BYTE get_index_ctx_inst_len(_In_ BYTE cbIndex, _Inout_ const LDE_HOOKING_STATE& state);
+
+	static BYTE get_index_opcode_len(_In_ BYTE cbIndex, _In_ const LDE_HOOKING_STATE& state);
 
 	template<typename STATE>
 	static void logInstructionAndAddress(_In_ LPBYTE lpReferenceAddress, _In_ const STATE& state);
@@ -311,13 +201,12 @@ private:
 	template<typename STATE>
 	static void log_1(_In_ LPBYTE lpReferenceAddress, _In_ const STATE& state);
 
-	template<typename STATE>
-	static BYTE analyse_special_group(_In_ LPBYTE lpCandidate, _Inout_ STATE& state) {
+	static BYTE analyse_special_group(_In_ LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, _Inout_ lde_error_codes& status) {
 		if (!lpCandidate) {
-			state.ecStatus = no_input;
+			status = no_input;
 			return 0;
 		}
-		state.ecStatus = success;
+		status = success;
 		switch (*lpCandidate) {
 			case 0x05:
 			case 0x07: 
@@ -331,33 +220,40 @@ private:
 			case 0x06: 
 			case 0x08: 
 			case 0x09: 
-			case 0x0B: { return 0; }
+			case 0x0B: {
+				return 0;
+			}
 			case 0x3A:
 			case 0xBA: {
-				incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
-				return SIZE_OF_WORD + analyse_mod_rm(lpCandidate + SIZE_OF_BYTE, state);
+				incrementOpcodeLenCtx(InstructionContext, status);
+				return SIZE_OF_WORD + analyse_mod_rm(lpCandidate + SIZE_OF_BYTE, InstructionContext, status);
 			}
 			case 0x38: {
-				incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
-				return SIZE_OF_BYTE + analyse_mod_rm(lpCandidate + SIZE_OF_BYTE, state);
+				incrementOpcodeLenCtx(InstructionContext, status);
+				break;
 			}
 			default: {
-				if ((*lpCandidate & 0xF0) == 0x80) { return SIZE_OF_DWORD; }
-				if (getOpcodeLenCtx(state.curr_instruction_ctx) < 4) { incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus); }
-				return SIZE_OF_BYTE + analyse_mod_rm(lpCandidate + SIZE_OF_BYTE, state);
+				if ((*lpCandidate & 0xF0) == 0x80) {
+					return SIZE_OF_DWORD;
+				}
+				if (getOpcodeLenCtx(InstructionContext) < 4) {
+					incrementOpcodeLenCtx(InstructionContext, status);
+				}
+				break;
 			}
 		}
+		return SIZE_OF_BYTE + analyse_mod_rm(lpCandidate + SIZE_OF_BYTE, InstructionContext, status);
 	}
 
-	template<typename STATE>
-	static BYTE analyse_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ STATE& state) {
+	
+	static BYTE analyse_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, _Inout_ lde_error_codes& status) {
 		BYTE cbRM				 = *lpCandidate & RM_MASK,
 			 cbReg				 = *lpCandidate & REG_MASK,
 		     cbMod				 = *lpCandidate & MOD_MASK,
 			 cb_added_opcode_len = 0;
-		state.ecStatus = success;
+		status = success;
 		if (!lpCandidate) {
-			state.ecStatus = no_input;
+			status = no_input;
 			return 0;
 		}
 		switch (cbMod) {
@@ -368,8 +264,8 @@ private:
 				cb_added_opcode_len += SIZE_OF_DWORD;
 				if (cbRM == 4) {
 					cb_added_opcode_len++;
-					if (getOpcodeLenCtx(state.curr_instruction_ctx) < SIZE_OF_DWORD) {
-						incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
+					if (getOpcodeLenCtx(InstructionContext) < SIZE_OF_DWORD) {
+						incrementOpcodeLenCtx(InstructionContext, status);
 					}
 					break;
 				}
@@ -381,7 +277,7 @@ private:
 			case 0x40: {
 				cb_added_opcode_len++;
 				if (cbRM == 4) {
-					incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
+					incrementOpcodeLenCtx(InstructionContext, status);
 					cb_added_opcode_len++;
 				}
 				break;
@@ -389,8 +285,8 @@ private:
 			default: {
 				if (cbRM == 4) {
 					cb_added_opcode_len++;
-					if (getOpcodeLenCtx(state.curr_instruction_ctx) < 4) {
-						incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
+					if (getOpcodeLenCtx(InstructionContext) < 4) {
+						incrementOpcodeLenCtx(InstructionContext, status);
 					}
 					if (analyse_sib_base(*(lpCandidate + SIZE_OF_BYTE))) {
 						cb_added_opcode_len += SIZE_OF_DWORD;
@@ -398,7 +294,7 @@ private:
 					break;
 				}
 				if (cbRM == 5) {
-					SetCurrentContextRipRel(state.curr_instruction_ctx);
+					SetCurrentContextRipRel(InstructionContext);
 					cb_added_opcode_len += SIZE_OF_DWORD;
 					break;
 				}
@@ -408,49 +304,56 @@ private:
 		return cb_added_opcode_len;
 	}
 
-	template<typename STATE>
-	static BYTE analyse_group3_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ STATE& state) {
+	static BYTE analyse_group3_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, lde_error_codes& status, BYTE prefix_count) {
 		if (!*lpCandidate) {
-			state.ecStatus = no_input;
+			status = no_input;
 			return 0;
 		}
-		state.ecStatus = success;
+		status = success;
 		BYTE ucReg				 = *(lpCandidate + SIZE_OF_BYTE) & REG_MASK,
 			 ucRM				 = *(lpCandidate + SIZE_OF_BYTE) & RM_MASK,
 			 ucMod				 = *(lpCandidate + SIZE_OF_BYTE) & MOD_MASK,
-			 uc_added_opcode_len = NULL,
+			 uc_added_opcode_len = 0,
 			 uc_added_imm_len	 = 0;
 		switch (*lpCandidate) {
 			case 0xF6: {
 				switch(ucMod) {
-					case 0xC0: { if (0x10 > ucReg) { uc_added_imm_len++; } break; }
+					case 0xC0: {
+						if (0x10 > ucReg) { uc_added_imm_len++; } break;
+					}
 					case 0x80: {
 						uc_added_imm_len ++;
 						if (ucRM == 4) {
-							incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
+							incrementOpcodeLenCtx(InstructionContext, status);
 							uc_added_opcode_len += SIZE_OF_DWORD;
 						}
-						if (0x10 > ucReg) { uc_added_imm_len++; }
+						if (0x10 > ucReg) {
+							uc_added_imm_len++;
+						}
 						break;
 					}
 					case 0x40: {
 						uc_added_imm_len++;
 						if (ucRM == 4) {
-							incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
+							incrementOpcodeLenCtx(InstructionContext, status);
 							uc_added_opcode_len++;
 						}
-						if (0x10 > ucReg) { uc_added_imm_len++; }
+						if (0x10 > ucReg) {
+							uc_added_imm_len++;
+						}
 						break;
 					}
 					default: {
 						if (ucRM == 4) {
-							incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
+							incrementOpcodeLenCtx(InstructionContext, status);
 							uc_added_opcode_len++;
-							if (analyse_sib_base(*(lpCandidate + 2))) { uc_added_imm_len += SIZE_OF_DWORD; }
+							if (analyse_sib_base(*(lpCandidate + 2))) {
+								uc_added_imm_len += SIZE_OF_DWORD;
+							}
 							break;
 						}
 						if (ucRM == 5) {
-							SetCurrentContextRipRel(state.curr_instruction_ctx);
+							SetCurrentContextRipRel(InstructionContext);
 							uc_added_opcode_len++;
 						}
 						break;
@@ -464,20 +367,20 @@ private:
 					case 0x80: {
 						uc_added_imm_len += 4;
 						if (ucRM == 4) {
-							incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
+							incrementOpcodeLenCtx(InstructionContext, status);
 							uc_added_opcode_len++;
 							if (analyse_sib_base(*(lpCandidate + SIZE_OF_WORD))) { uc_added_imm_len += SIZE_OF_DWORD; }
 						}
-						if (0x10 > ucReg) { uc_added_imm_len += analyse_reg_size_0xF7(lpCandidate, state); }
+						if (0x10 > ucReg) { uc_added_imm_len += analyse_reg_size_0xF7(lpCandidate, status, prefix_count); }
 						break;
 					}
 					case 0x40: {
 						if (ucRM == 4) {
-							incrementOpcodeLenCtx(state.curr_instruction_ctx, state.ecStatus);
+							incrementOpcodeLenCtx(InstructionContext, status);
 							uc_added_opcode_len++;
 							break;
 						}
-						if (0x10 > ucReg) { uc_added_imm_len += analyse_reg_size_0xF7(lpCandidate, state); }
+						if (0x10 > ucReg) { uc_added_imm_len += analyse_reg_size_0xF7(lpCandidate, status, prefix_count); }
 						break;
 					}
 					default: { if (!ucReg) { uc_added_imm_len += SIZE_OF_DWORD; } break; }
@@ -485,21 +388,21 @@ private:
 				break;
 			}
 			default: {
-				state.ecStatus = wrong_input;
+				status = wrong_input;
 				return 0;
 			}
 		}
 		return uc_added_opcode_len + uc_added_imm_len;
 	}
 
-	template<typename STATE>
-	static BYTE analyse_reg_size_0xF7(_In_ LPBYTE lpCandidate, _In_ STATE& state) {
+	
+	static BYTE analyse_reg_size_0xF7(_In_ LPBYTE lpCandidate, _Inout_ lde_error_codes& status, BYTE prefix_count) {
 		if (!lpCandidate) {
-			state.ecStatus = no_input;
+			status = no_input;
 			return 0;
 		}
-		state.ecStatus = success;
-		if (is_curr_instruction_shortened(getCurrentPrefixCount(state), lpCandidate)) {
+		status = success;
+		if (is_curr_instruction_shortened(prefix_count, lpCandidate)) {
 			return SIZE_OF_WORD;
 		}
 		return SIZE_OF_DWORD;
@@ -508,9 +411,6 @@ private:
 	static WORD analyse_opcode_type(_In_ LPBYTE lpCandidate_addr, _Inout_ BYTE& InstructionContext_ref);
 
 	static LPBYTE analyse_redirecting_instruction(_In_ DWORD cbAccumulatedLength, _Inout_ LDE_HOOKING_STATE& state);
-
-	template<typename STATE>
-	static BYTE get_index_prefix_count(BYTE ucIndex, STATE& state);
 
 	template<typename STATE>
 	static void prepareForNextStep(STATE& state){

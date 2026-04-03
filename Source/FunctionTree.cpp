@@ -160,17 +160,14 @@ FUNCTION_TREE::ErrorCode FUNCTION_TREE::Trace() {
 }
 
 void BLOCK::logIndex() const {
-	if (dwIndex & ENDS_UNCOND_JUMP) {
-		std::cout << "* ";
-	}
 	if (dwIndex & COND_BLOCK_MASK) {
 		dwIndex & C_JUMP_TAKEN_MASK ?
-			std::cout << std::format("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Taken)\n\n", dwIndex & MAX_BRANCH_INDEX, dwHeight):
-			std::cout << std::format("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Not Taken)\n\n", dwIndex & MAX_BRANCH_INDEX, dwHeight);
+			std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Taken)\n", dwIndex & MAX_BRANCH_INDEX, dwHeight):
+			std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Not Taken)\n", dwIndex & MAX_BRANCH_INDEX, dwHeight);
 	} else {
 		dwHeight ?
-			std::cout << std::format("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Non Conditional)\n\n", dwIndex & 0x00FFFFFF, dwHeight):
-			std::cout << "[!] Analysing Root Branch (Non Conditional)\n\n";
+			std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Non Conditional)\n", dwIndex & 0x00FFFFFF, dwHeight):
+			std::println("[!] Analysing Root Branch (Non Conditional)\n");
 	}
 }
 
@@ -198,8 +195,8 @@ void BLOCK::handleEndOfTrace(LPBYTE lpCurrentAddress, LDE_STATE& state) {
 IS_NEW_BRANCH BLOCK::Trace(_Out_ std::vector<BYTE *>& NewFunctionsVec) {
 	LPBYTE	  lpReference = const_cast<BYTE*>(lpLandmarks->lpRoot);
 	LDE_STATE state;
-	while (state.instructionCount < ROOT_BRANCH_INSTRUCTION_COUNT) {
-		BYTE ucInstructionLen = LDE::MapInstructionLen(lpReference, state);
+	while (state.instructionCount < ROOT_BRANCH_INSTRUCTION_COUNT && state.ecStatus == success) {
+		BYTE ucInstructionLen = LDE::mapInstructionLen(lpReference, state.curr_instruction_ctx, state.ecStatus, state.prefixCountArray[state.instructionCount]);
 		if (!ucInstructionLen) {
 			return algorithm_failed;
 		}
@@ -236,15 +233,19 @@ IS_NEW_BRANCH BLOCK::Trace(_Out_ std::vector<BYTE *>& NewFunctionsVec) {
 IS_NEW_BRANCH BLOCK::TraceUntil(_Out_ std::vector<BYTE*>& vNewFunctionsVec, LPBYTE lpUntilAddress) {
 	LPBYTE	  lpReference = const_cast<BYTE*>(lpLandmarks->lpRoot);
 	LDE_STATE state;
-	//logIndex();
+#ifdef DEBUG
+	logIndex();
+#endif
 	BYTE ucInstructionLen = 0;
 	while (state.instructionCount < ROOT_BRANCH_INSTRUCTION_COUNT && lpUntilAddress <= lpLandmarks->lpRoot) {
 		if (lpReference == lpUntilAddress && ucInstructionLen) {
 			handleEndOfTrace(lpReference, state);
 			return no;
 		}
-		ucInstructionLen = LDE::MapInstructionLen(lpReference, state);
-		//LDE::logInstructionAndAddress(lpReference, state);
+		ucInstructionLen = LDE::mapInstructionLen(lpReference, state.curr_instruction_ctx, state.ecStatus, state.prefixCountArray[state.instructionCount]);
+#ifdef DEBUG
+		LDE::logInstructionAndAddress(lpReference, state);
+#endif
 		LDE::prepareForNextStep(state);
 		switch (LDE::checkForNewBlock(state, lpReference)) {
 			case yes_reached_non_conditional_branch: {
@@ -289,13 +290,13 @@ BOOLEAN FUNCTION_TREE::checkIfTraced(BLOCK& JustTracedBlock, std::map<BYTE*, BLO
 
 void BLOCK::print(void) const {
 	if (!lpLandmarks->lpEnd) {
-		std::cout << "[!] This Branch Is Not Traced Yet.";
+		std::println("[!] This Branch Is Not Traced Yet.");
 	}
 	for (DWORD dwAccumulatedLength = 0, i = 0; BYTE Context: ldeState->contextsArray) {
 		LDE::logInstructionAndAddressCtx(const_cast<LPBYTE>(lpLandmarks->lpRoot) + dwAccumulatedLength, Context, static_cast<BYTE>(i));
 		dwAccumulatedLength += LDE::GetInstructionLenCtx(Context);
 		if (i == 0xFF) {
-			std::cout << std::format("Hit an error while printing Block #{:03d}\n", dwIndex);
+			std::println("Hit an error while printing Block #{:03d}", dwIndex);
 			return;
 		}
 		i++;
