@@ -124,7 +124,7 @@ struct FunctionTree {
 
 	std::vector<std::unique_ptr<Block>> blocksVec;
 	std::vector<BYTE*> newFunctionsVec;
-	const LPBYTE root;
+	LPBYTE const root;
 	std::vector<DWORD>leavesVec;
 
 	FunctionTree(const LPBYTE& lpFunctionRoot):

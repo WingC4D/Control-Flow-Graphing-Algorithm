@@ -13,10 +13,10 @@ BOOLEAN Block::isInRange(const LPBYTE candidate_address) const {
 BOOLEAN Block::isInstructionHead(LPBYTE candidate_address) const {
 	if (!landmarksPtr->end) 
 		return false;
-	for (DWORD dwAccumulatedLength = 0; BYTE Context: ldeState->contextsArray) {
-		if (landmarksPtr->root + dwAccumulatedLength == candidate_address) 
+	for (DWORD accumulated_length = 0; BYTE Context: ldeState->contextsArray) {
+		if (landmarksPtr->root + accumulated_length == candidate_address) 
 			return true;
-		dwAccumulatedLength += Lde::getInstructionLengthCtx(Context);
+		accumulated_length += Lde::getInstructionLengthCtx(Context);
 	}
 	return false;
 }
@@ -33,7 +33,7 @@ void Block::resize(BYTE new_size, LPBYTE new_end_address) const {
 void Block::findNewEnd(LPBYTE interlacing_root_ptr) const {
 	DWORD accumulated_length = 0;
 	for (BYTE last_instruction_length = 0, new_instruction_count = 0; BYTE Context : ldeState->contextsArray) {
-		if (const_cast<LPBYTE>(landmarksPtr->root) + accumulated_length == interlacing_root_ptr) {
+		if (landmarksPtr->root + accumulated_length == interlacing_root_ptr) {
 			if (new_instruction_count) 
 				resize(new_instruction_count, interlacing_root_ptr - last_instruction_length);
 			return;
@@ -88,7 +88,6 @@ AddBlock FunctionTree::addBlock(LPBYTE address_to_add, DWORD new_block_index, DW
 		if (PreviousBlock.isInRange(address_to_add)) 
 			if (splitBlock(PreviousBlock, address_to_add, RootsMap)) 
 				return split;
-		
 	}
 	blocksVec.emplace_back(std::make_unique<Block>(address_to_add, parent_index, new_block_index, height));
 	return added;
@@ -153,13 +152,11 @@ void Block::logIndex() const {
 
 void Block::addResolvedCall(std::vector<unsigned char*>& NewFunctionVec, unsigned char* resolved_address) {
 	bool was_added = false;
-	for (unsigned char* stored_func_address : NewFunctionVec) {
-		if (stored_func_address == resolved_address) {
-			was_added = true;
+	for (unsigned char* stored_func_address: NewFunctionVec) 
+		if ((was_added = stored_func_address == resolved_address)) 
 			break;
-		}
-	}
-	if (!was_added) NewFunctionVec.emplace_back(resolved_address);
+	if (!was_added) 
+		NewFunctionVec.emplace_back(resolved_address);
 }
 
 void Block::handleEndOfTrace(LPBYTE current_address, LdeState& State) {
@@ -176,7 +173,7 @@ IsNewBranch Block::trace(_Out_ std::vector<BYTE *>& NewFunctionsVec) {
 		BYTE instruction_length = Lde::mapInstructionLength(reference_ptr, State.currInstructionContext, State.status, State.prefixCountArray[State.instructionCount]);
 		if (!instruction_length) 
 			return algorithm_failed;
-		Lde::prepareForNextStep(State);
+		State.prepareForNextStep();
 		switch (Lde::checkForNewBlock(State, reference_ptr)) {
 			case yes_reached_non_conditional_branch: {
 				handleEndOfTrace(reference_ptr, State);
@@ -220,7 +217,7 @@ IsNewBranch Block::TraceUntil(_Out_ std::vector<LPBYTE>& NewFunctionsVec, _In_ c
 #ifdef DEBUG
 		Lde::logInstructionAndAddress(reference_ptr, State);
 #endif
-		Lde::prepareForNextStep(State);
+		State.prepareForNextStep();
 		switch (Lde::checkForNewBlock(State, reference_ptr)) {
 			case yes_reached_non_conditional_branch: {
 				handleEndOfTrace(reference_ptr, State);
@@ -249,16 +246,16 @@ IsNewBranch Block::TraceUntil(_Out_ std::vector<LPBYTE>& NewFunctionsVec, _In_ c
 }
 
 BOOLEAN FunctionTree::checkIfTraced(Block& JustTracedBlock, std::map<BYTE*, Block*>& RootsMap) const {
-	std::map<BYTE*, Block*>::iterator itNextBlock = RootsMap.upper_bound(JustTracedBlock.landmarksPtr->root);
-	if (itNextBlock == RootsMap.end())
+	std::map<BYTE*, Block*>::iterator NextBlockIterator = RootsMap.upper_bound(JustTracedBlock.landmarksPtr->root);
+	if (NextBlockIterator == RootsMap.end())
 		return false;
-	if (JustTracedBlock.idx == itNextBlock->second->idx) 
+	if (JustTracedBlock.idx == NextBlockIterator->second->idx) 
 		return false;
-	if (!JustTracedBlock.isInRange(itNextBlock->second->landmarksPtr->root))
+	if (!JustTracedBlock.isInRange(NextBlockIterator->second->landmarksPtr->root))
 		return false;
 	
-	JustTracedBlock.findNewEnd(itNextBlock->second->landmarksPtr->root);
-	transferUniqueChildren(JustTracedBlock, *itNextBlock->second);
+	JustTracedBlock.findNewEnd(NextBlockIterator->second->landmarksPtr->root);
+	transferUniqueChildren(JustTracedBlock, *NextBlockIterator->second);
 	return true;
 }
 

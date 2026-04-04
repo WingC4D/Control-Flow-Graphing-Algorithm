@@ -23,7 +23,7 @@
 enum IsNewBranch: BYTE;
 struct FunctionTree;
 struct Block;
-struct CONDITIONAL_BRANCH;
+interface LdeCommon;
 constexpr BYTE SIZE_OF_BYTE					 = 0x01,
                SIZE_OF_WORD					 = 0x02,
                SIZE_OF_DWORD				 = 0x04,
@@ -66,27 +66,36 @@ namespace opcodes {
 				   CALL	  = 0xE8;
 }
 
-struct LdeHookingState {
+interface LdeCommon {
+	LdeErrorCodes    status = success;
+	BYTE			 currInstructionContext = 0,
+					 instructionCount = 0;
+public:
+	virtual BYTE getCurrentPrefixCount() = 0;
+	virtual ~LdeCommon() = default;
+	virtual void prepareForNextStep() = 0;
+};
+
+struct LdeHookingState: LdeCommon {
 	LPVOID			functionAddress;
-	LdeErrorCodes   status				   = success;
-	BYTE			currInstructionContext = 0,
-					instructionCount	   = 0,
-					ripIndexesCount		   = 0,
+	BYTE			ripIndexesCount		   = 0,
 					contextsArray[RELATIVE_TRAMPOLINE_SIZE]{ },
 					prefixCountArray[RELATIVE_TRAMPOLINE_SIZE]{ },
 					ripRelativeIndexesArray[RELATIVE_TRAMPOLINE_SIZE]{ };
-	BYTE getCurrentPrefixCount() const {
+	LdeHookingState(LPVOID target_address): functionAddress(target_address) {}
+	BYTE getCurrentPrefixCount() override {
 		return static_cast<unsigned char>(prefixCountArray[instructionCount] & 0x0F);
 	}
-	LdeHookingState(LPVOID target_address): functionAddress(target_address) {
+
+	void prepareForNextStep() override {
+		contextsArray[instructionCount] = currInstructionContext;
+		currInstructionContext = 0;
+		instructionCount++;
 	}
 };
 
-struct LdeState {
-	LdeErrorCodes    status;
-	BYTE			 currInstructionContext,
-					 instructionCount,
-					 newBlocksCount;
+struct LdeState: LdeCommon {
+	BYTE			 newBlocksCount;
 	std::vector<BYTE>contextsArray,
 					 prefixCountArray;
 	LdeState():
@@ -97,25 +106,32 @@ struct LdeState {
 		instructionCount	   = 0;
 		newBlocksCount		   = 0;
 	}
-	BYTE getCurrentPrefixCount() const {
+	BYTE getCurrentPrefixCount() override {
 		return static_cast<unsigned char>(prefixCountArray[instructionCount] & 0x0F);
+	}
+	void prepareForNextStep() override {
+		contextsArray[instructionCount] = currInstructionContext;
+		currInstructionContext			= 0;
+		instructionCount++;
 	}
 };
 
-struct LdeJumpResolutionState {
+struct LdeJumpResolutionState: LdeCommon {
 	LPVOID			lpFuncAddr;
-	LdeErrorCodes   status					= success;
-	BYTE			currInstructionContext	= 0,
-					instructionCount		= 0,
-					cb_count_of_rip_indexes = 0,
+	BYTE			cb_count_of_rip_indexes = 0,
 					contextsArray[1]{},
 					prefixCountArray[1]{},
 					rip_relative_indexes[1]{};
 	
 	LdeJumpResolutionState(LPVOID lpTarget): lpFuncAddr(lpTarget) {}
 
-	BYTE getCurrentPrefixCount() const {
-		return static_cast<unsigned char>(prefixCountArray[instructionCount] & 0x0F);
+	BYTE getCurrentPrefixCount() override {
+		return static_cast<unsigned char>(prefixCountArray[0] & 0x0F);
+	}
+	void prepareForNextStep() override {
+		contextsArray[0]	   = currInstructionContext;
+		currInstructionContext = 0;
+		instructionCount	   = 1;
 	}
 };
 
@@ -135,7 +151,9 @@ class Lde { friend FunctionTree; friend  Block;
 
 	static IsNewBranch checkForNewBlock(LdeState& state, LPBYTE lpReference);
 
-	inline static BYTE getInstructionLengthCtx(_In_ BYTE CandidateContext);
+	static BYTE getInstructionLengthCtx(_In_ BYTE CandidateContext) {
+		return static_cast<BYTE>(CandidateContext & 0x3C) >> 2;
+	}
 
 	[[nodiscard]] static BYTE mapInstructionLength(_In_ LPVOID analysis_address, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status, _Inout_ BYTE& prefix_count);
 
@@ -159,7 +177,7 @@ class Lde { friend FunctionTree; friend  Block;
 
 	inline static void resetHookingContexts(_Inout_ LdeHookingState& State);
 
-	inline static void set_curr_ctx_bRex_w(_Inout_ BYTE& ucInstruction_ctx);
+	inline static void set_curr_ctx_bRex_w(_Inout_ BYTE& InstructionContext);
 
 	inline static void setContextRipRel(_Inout_ BYTE& CandidateContext);
 
@@ -186,67 +204,11 @@ class Lde { friend FunctionTree; friend  Block;
 	template<typename STATE>
 	static void log_2(_In_ BYTE instruction_count, _In_ STATE& State);
 
-	static void log_1(_In_ LPBYTE reference_address, _In_ const LdeHookingState& State);
+	static void log_1(_In_ LPBYTE reference_address, _In_ LdeHookingState& State);
 
 	static BYTE analyse_special_group(_In_ LPBYTE candidate_address, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
 
-	static BYTE analyse_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status) {
-		BYTE cbRM				 = *lpCandidate & RM_MASK,
-			 cbReg				 = *lpCandidate & REG_MASK,
-		     cbMod				 = *lpCandidate & MOD_MASK,
-			 added_opcode_length = 0;
-		status = success;
-		if (!lpCandidate) {
-			status = no_input;
-			return 0;
-		}
-		switch (cbMod) {
-			case 0xC0: {
-				break;
-			}
-			case 0x80: {
-				added_opcode_length += SIZE_OF_DWORD;
-				if (cbRM == 4) {
-					added_opcode_length++;
-					if (getOpcodeLenCtx(InstructionContext) < SIZE_OF_DWORD) {
-						incrementOpcodeLenCtx(InstructionContext, status);
-					}
-					break;
-				}
-				if (cbReg < 0x10) {
-					added_opcode_length++;
-				}
-				break;
-			}
-			case 0x40: {
-				added_opcode_length++;
-				if (cbRM == 4) {
-					incrementOpcodeLenCtx(InstructionContext, status);
-					added_opcode_length++;
-				}
-				break;
-			}
-			default: {
-				if (cbRM == 4) {
-					added_opcode_length++;
-					if (getOpcodeLenCtx(InstructionContext) < 4) {
-						incrementOpcodeLenCtx(InstructionContext, status);
-					}
-					if (analyseSibBase(*(lpCandidate + SIZE_OF_BYTE))) {
-						added_opcode_length += SIZE_OF_DWORD;
-					}
-					break;
-				}
-				if (cbRM == 5) {
-					setContextRipRel(InstructionContext);
-					added_opcode_length += SIZE_OF_DWORD;
-					break;
-				}
-				break;
-			}
-		}
-		return added_opcode_length;
-	}
+	static BYTE analyse_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
 
 	static BYTE analyse_group3_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, LdeErrorCodes& status, BYTE prefix_count) {
 		if (!*lpCandidate) {
@@ -263,9 +225,8 @@ class Lde { friend FunctionTree; friend  Block;
 			case 0xF6: {
 				switch(mod_bits) {
 					case 0xC0: {
-						if (0x10 > reg_bits) {
+						if (0x10 > reg_bits)
 							added_immediate_length++;
-						}
 						break;
 					}
 					case 0x80: {
@@ -274,9 +235,8 @@ class Lde { friend FunctionTree; friend  Block;
 							incrementOpcodeLenCtx(InstructionContext, status);
 							added_opcode_length += SIZE_OF_DWORD;
 						}
-						if (0x10 > reg_bits) {
+						if (0x10 > reg_bits) 
 							added_immediate_length++;
-						}
 						break;
 					}
 					case 0x40: {
@@ -285,18 +245,16 @@ class Lde { friend FunctionTree; friend  Block;
 							incrementOpcodeLenCtx(InstructionContext, status);
 							added_opcode_length++;
 						}
-						if (0x10 > reg_bits) {
+						if (0x10 > reg_bits) 
 							added_immediate_length++;
-						}
 						break;
 					}
 					default: {
 						if (rm_bits == 4) {
 							incrementOpcodeLenCtx(InstructionContext, status);
 							added_opcode_length++;
-							if (analyseSibBase(*(lpCandidate + 2))) {
+							if (analyseSibBase(*(lpCandidate + 2))) 
 								added_immediate_length += SIZE_OF_DWORD;
-							}
 							break;
 						}
 						if (rm_bits == 5) {
@@ -311,9 +269,8 @@ class Lde { friend FunctionTree; friend  Block;
 			case 0xF7: {
 				switch (mod_bits) {
 					case 0xC0: {
-						if (0x10 > reg_bits) {
+						if (0x10 > reg_bits) 
 							added_immediate_length++;
-						}
 						break;
 					}
 					case 0x80: {
@@ -321,13 +278,11 @@ class Lde { friend FunctionTree; friend  Block;
 						if (rm_bits == 4) {
 							incrementOpcodeLenCtx(InstructionContext, status);
 							added_opcode_length++;
-							if (analyseSibBase(*(lpCandidate + SIZE_OF_WORD))) {
+							if (analyseSibBase(*(lpCandidate + SIZE_OF_WORD)))
 								added_immediate_length += SIZE_OF_DWORD;
-							}
 						}
-						if (0x10 > reg_bits) {
+						if (0x10 > reg_bits)
 							added_immediate_length += analyse_reg_size_0xF7(lpCandidate, status, prefix_count);
-						}
 						break;
 					}
 					case 0x40: {
@@ -336,9 +291,9 @@ class Lde { friend FunctionTree; friend  Block;
 							added_opcode_length++;
 							break;
 						}
-						if (0x10 > reg_bits) {
+						if (0x10 > reg_bits) 
 							added_immediate_length += analyse_reg_size_0xF7(lpCandidate, status, prefix_count);
-						}
+						
 						break;
 					}
 					default: {
@@ -373,13 +328,6 @@ class Lde { friend FunctionTree; friend  Block;
 	static WORD analyseOpcodeType(_In_ LPBYTE candidate_addr, _Inout_ BYTE& InstructionContext);
 
 	static LPBYTE analyseRedirectingInstruction(_In_ DWORD accumulated_length, _Inout_ LdeHookingState& State);
-
-	template<typename STATE>
-	static void prepareForNextStep(STATE& state){
-		state.contextsArray[state.instructionCount] = state.currInstructionContext;
-		state.currInstructionContext				= 0;
-		state.instructionCount					   += 1;
-	}
 
 	enum instruction_types: WORD {
 		inc				  = 0x0000,

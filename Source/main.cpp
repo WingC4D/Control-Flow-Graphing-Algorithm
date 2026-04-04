@@ -1,6 +1,6 @@
 #include "..\Headers\main.h"
 
-int main(void) {
+int main() {
 	FunctionTree funcTree(reinterpret_cast<LPBYTE>(GetProcAddress(GetModuleHandleA("KernelBase.dll"), "CreateProcessInternalW")));
 	funcTree.Trace();
 	std::cin.get();
