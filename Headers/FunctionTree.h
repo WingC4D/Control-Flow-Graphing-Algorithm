@@ -10,14 +10,17 @@
 
 class  Lde;
 struct LdeState;
-enum IsNewBranch : BYTE {
-	no,
-	no_reached_ret,
-	yes_reached_conditional_branch,
-	yes_reached_non_conditional_branch,
-	yes_is_call,
-	algorithm_failed
-};
+
+namespace blk {
+	enum TraceResults: BYTE {
+		noNewBlock,
+		reachedReturn,
+		reachedConditionalJump,
+		reachedNonConditionalJump,
+		reachedCall,
+		failed
+	};
+}
 constexpr DWORD NEW_FUNCTIONS_BASE_SIZE = 0x00,
 
 			    ENDS_UNCOND_JUMP		= 0x20000000,
@@ -26,13 +29,13 @@ constexpr DWORD NEW_FUNCTIONS_BASE_SIZE = 0x00,
 				MAX_BRANCH_INDEX		= 0X1FFFFFFF,
 				INVALID_BLOCK_INDEX		= 0xFFFFFFFF;
 
-struct NEW_BRANCH_PREREQ {
+struct BlockPrerequisites {
 	LPBYTE root;
 	DWORD  index,
 		   parentIndex,
 		   height;
 
-	NEW_BRANCH_PREREQ(LPBYTE candidate_address, DWORD new_index, DWORD parent_index, DWORD height):
+	BlockPrerequisites(LPBYTE candidate_address, DWORD new_index, DWORD parent_index, DWORD height):
 	root(candidate_address),
 	index(new_index),
 	parentIndex(parent_index),
@@ -80,9 +83,9 @@ struct Block {
 
 	BOOLEAN isInstructionHead(LPBYTE candidate_address) const;
 
-	IsNewBranch trace(std::vector<LPBYTE>& NewFunctionsVec);
+	blk::TraceResults trace(std::vector<LPBYTE>& NewFunctionsVec);
 
-	IsNewBranch TraceUntil(std::vector<LPBYTE>& NewFunctionsVec, LPBYTE until_address);
+	blk::TraceResults traceUntil(std::vector<LPBYTE>& NewFunctionsVec, LPBYTE until_address);
 
 	BOOLEAN isInRange(LPBYTE candidate_address) const;
 
@@ -110,32 +113,29 @@ struct FunctionTreeTraceCtx {
 };
 
 struct ConditionalJumpCtx {
-	LPBYTE  lpShallowAddress,
-	        lpDeepAddress;
-	DWORD	dwShallowIndex,
-			dwDeepIndex;
+	LPBYTE  shallowPtr,
+	        deepPtr;
+	DWORD	shallowIdx,
+			deepIdx;
 };
-
-struct FunctionTree {
-	enum ErrorCode: BYTE {
+namespace fTree {
+	enum ErrorCode : BYTE {
 		success,
 		failed
 	};
-
+}
+struct FunctionTree {
+	
 	std::vector<std::unique_ptr<Block>> blocksVec;
 	std::vector<BYTE*> newFunctionsVec;
 	LPBYTE const root;
 	std::vector<DWORD>leavesVec;
 
-	FunctionTree(const LPBYTE& lpFunctionRoot):
-	blocksVec(0),
-	newFunctionsVec(NEW_FUNCTIONS_BASE_SIZE),
-	root(lpFunctionRoot),
-	leavesVec(NULL) {
-		blocksVec.emplace_back(std::make_unique<Block>(lpFunctionRoot, 0xFFFFFFFF, 0, 0));
+	FunctionTree(LPVOID lpFunctionRoot): blocksVec(0), newFunctionsVec(NEW_FUNCTIONS_BASE_SIZE), root(static_cast<BYTE*>(lpFunctionRoot)), leavesVec(0) {
+		blocksVec.emplace_back(std::make_unique<Block>(root, 0xFFFFFFFF, 0, 0));
 	}
 
-	ErrorCode Trace();
+	fTree::ErrorCode trace();
 
 	inline BOOLEAN splitBlock(Block& BlockToSplit, LPBYTE splitting_address, std::map<BYTE*, Block*>& RootsMap);
 

@@ -20,7 +20,7 @@
 	#endif
 #endif
 
-enum IsNewBranch: BYTE;
+
 struct FunctionTree;
 struct Block;
 interface LdeCommon;
@@ -29,6 +29,7 @@ constexpr BYTE SIZE_OF_BYTE					 = 0x01,
                SIZE_OF_DWORD				 = 0x04,
 			   RELATIVE_TRAMPOLINE_SIZE		 = 0x05,
                SIZE_OF_QWORD				 = 0x08,
+			   MAX_PREFIX_COUNT				 = 0x0E,
                SIZE_OF_OWORD				 = 0x10,
                REX_MASK						 = 0x40,
                RIP_RELATIVE_MASK			 = 0x80,
@@ -40,7 +41,7 @@ constexpr BYTE SIZE_OF_BYTE					 = 0x01,
                CALLS_MASK					 = 0x40,
                CONDITIONALS_MASK			 = 0x80,
                DISPOSITIONS_MASK			 = 0x30,
-               ROOT_BRANCH_INSTRUCTION_COUNT = 0xA0;
+               BLOCK_MAX_INSTRUCTIONS = 0xA0;
 
 
 
@@ -77,11 +78,11 @@ public:
 };
 
 struct LdeHookingState: LdeCommon {
-	LPVOID			functionAddress;
-	BYTE			ripIndexesCount		   = 0,
-					contextsArray[RELATIVE_TRAMPOLINE_SIZE]{ },
-					prefixCountArray[RELATIVE_TRAMPOLINE_SIZE]{ },
-					ripRelativeIndexesArray[RELATIVE_TRAMPOLINE_SIZE]{ };
+	LPVOID functionAddress;
+	BYTE   ripIndexesCount = 0,
+		   contextsArray[RELATIVE_TRAMPOLINE_SIZE]{},
+		   prefixCountArray[RELATIVE_TRAMPOLINE_SIZE]{},
+		   ripRelativeIndexesArray[RELATIVE_TRAMPOLINE_SIZE]{};
 	LdeHookingState(LPVOID target_address): functionAddress(target_address) {}
 	BYTE getCurrentPrefixCount() override {
 		return static_cast<unsigned char>(prefixCountArray[instructionCount] & 0x0F);
@@ -95,12 +96,12 @@ struct LdeHookingState: LdeCommon {
 };
 
 struct LdeState: LdeCommon {
-	BYTE			 newBlocksCount;
-	std::vector<BYTE>contextsArray,
-					 prefixCountArray;
+	BYTE			  newBlocksCount;
+	std::vector<BYTE> contextsArray,
+					  prefixCountArray;
 	LdeState():
-	contextsArray(ROOT_BRANCH_INSTRUCTION_COUNT),
-	prefixCountArray(ROOT_BRANCH_INSTRUCTION_COUNT) {
+	contextsArray(BLOCK_MAX_INSTRUCTIONS),
+	prefixCountArray(BLOCK_MAX_INSTRUCTIONS) {
 		status				   = success;
 		currInstructionContext = 0;
 		instructionCount	   = 0;
@@ -117,17 +118,18 @@ struct LdeState: LdeCommon {
 };
 
 struct LdeJumpResolutionState: LdeCommon {
-	LPVOID			lpFuncAddr;
-	BYTE			cb_count_of_rip_indexes = 0,
-					contextsArray[1]{},
-					prefixCountArray[1]{},
-					rip_relative_indexes[1]{};
-	
-	LdeJumpResolutionState(LPVOID lpTarget): lpFuncAddr(lpTarget) {}
+	LPVOID toResolve;
+	BYTE   ripIndexesCount = 0,
+		   contextsArray[1]{},
+		   prefixCountArray[1]{},
+		   ripRelativeIndexesArray[1]{};
+
+	LdeJumpResolutionState(LPVOID lpTarget): toResolve(lpTarget) {}
 
 	BYTE getCurrentPrefixCount() override {
 		return static_cast<unsigned char>(prefixCountArray[0] & 0x0F);
 	}
+
 	void prepareForNextStep() override {
 		contextsArray[0]	   = currInstructionContext;
 		currInstructionContext = 0;
@@ -140,16 +142,16 @@ enum state: BYTE {
 	reached_nt_dll,
 	branch_is_obfuscated
 };
-
+namespace blk { enum TraceResults : BYTE; }
 class Lde { friend FunctionTree; friend  Block;
 
 	static BYTE getValidInstructionsSizeHook(_Inout_ LPVOID& target_address, _Out_ LdeHookingState& State);
 
-	static BOOLEAN findAndFixRelocations(_Inout_ LPBYTE gateway_trampoline_ptr, _In_ LPVOID target_function_ptr, _In_  LdeHookingState& State);
+	static BOOLEAN findAndFixRelocations(_Inout_ LPBYTE trampoline_gateway_address, _In_ LPVOID target_function_ptr, _In_  LdeHookingState& State);
 
 	static LPBYTE resolveJump(_In_ LPBYTE to_resolve_address);
 
-	static IsNewBranch checkForNewBlock(LdeState& state, LPBYTE lpReference);
+	static blk::TraceResults checkForNewBlock(BYTE& InstructionContext, LPBYTE lpReference);
 
 	static BYTE getInstructionLengthCtx(_In_ BYTE CandidateContext) {
 		return static_cast<BYTE>(CandidateContext & 0x3C) >> 2;
@@ -185,7 +187,7 @@ class Lde { friend FunctionTree; friend  Block;
 
 	inline static BYTE getOpcodeLenCtx(_In_ BYTE CandidateContext);
 
-	static BOOLEAN traceIntoIAT(LdeHookingState& state);
+	static BOOLEAN traceIntoIAT(LdeHookingState& State);
 
 	static inline BOOLEAN isCurrentInstructionShortened(BYTE prefix_count, LPBYTE reference_address);
 
@@ -208,110 +210,9 @@ class Lde { friend FunctionTree; friend  Block;
 
 	static BYTE analyse_special_group(_In_ LPBYTE candidate_address, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
 
-	static BYTE analyse_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
+	static BYTE analyse_mod_rm(_In_ LPBYTE preceding_byte_ptr, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
 
-	static BYTE analyse_group3_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, LdeErrorCodes& status, BYTE prefix_count) {
-		if (!*lpCandidate) {
-			status = no_input;
-			return 0;
-		}
-		status						= success;
-		BYTE reg_bits				= *(lpCandidate + SIZE_OF_BYTE) & REG_MASK,
-			 rm_bits				= *(lpCandidate + SIZE_OF_BYTE) & RM_MASK,
-			 mod_bits				= *(lpCandidate + SIZE_OF_BYTE) & MOD_MASK,
-			 added_opcode_length	= 0,
-			 added_immediate_length	= 0;
-		switch (*lpCandidate) {
-			case 0xF6: {
-				switch(mod_bits) {
-					case 0xC0: {
-						if (0x10 > reg_bits)
-							added_immediate_length++;
-						break;
-					}
-					case 0x80: {
-						added_immediate_length ++;
-						if (rm_bits == 4) {
-							incrementOpcodeLenCtx(InstructionContext, status);
-							added_opcode_length += SIZE_OF_DWORD;
-						}
-						if (0x10 > reg_bits) 
-							added_immediate_length++;
-						break;
-					}
-					case 0x40: {
-						added_immediate_length++;
-						if (rm_bits == 4) {
-							incrementOpcodeLenCtx(InstructionContext, status);
-							added_opcode_length++;
-						}
-						if (0x10 > reg_bits) 
-							added_immediate_length++;
-						break;
-					}
-					default: {
-						if (rm_bits == 4) {
-							incrementOpcodeLenCtx(InstructionContext, status);
-							added_opcode_length++;
-							if (analyseSibBase(*(lpCandidate + 2))) 
-								added_immediate_length += SIZE_OF_DWORD;
-							break;
-						}
-						if (rm_bits == 5) {
-							setContextRipRel(InstructionContext);
-							added_opcode_length++;
-						}
-						break;
-					}
-				}
-				break;
-			}
-			case 0xF7: {
-				switch (mod_bits) {
-					case 0xC0: {
-						if (0x10 > reg_bits) 
-							added_immediate_length++;
-						break;
-					}
-					case 0x80: {
-						added_immediate_length += SIZE_OF_DWORD;
-						if (rm_bits == 4) {
-							incrementOpcodeLenCtx(InstructionContext, status);
-							added_opcode_length++;
-							if (analyseSibBase(*(lpCandidate + SIZE_OF_WORD)))
-								added_immediate_length += SIZE_OF_DWORD;
-						}
-						if (0x10 > reg_bits)
-							added_immediate_length += analyse_reg_size_0xF7(lpCandidate, status, prefix_count);
-						break;
-					}
-					case 0x40: {
-						if (rm_bits == 4) {
-							incrementOpcodeLenCtx(InstructionContext, status);
-							added_opcode_length++;
-							break;
-						}
-						if (0x10 > reg_bits) 
-							added_immediate_length += analyse_reg_size_0xF7(lpCandidate, status, prefix_count);
-						
-						break;
-					}
-					default: {
-						if (!reg_bits) {
-							added_immediate_length += SIZE_OF_DWORD;
-						}
-						break;
-					}
-				}
-				break;
-			}
-			default: {
-				status = wrong_input;
-				return 0;
-			}
-		}
-		return added_opcode_length + added_immediate_length;
-	}
+	static BYTE analyse_group3_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, _Out_ LdeErrorCodes& status, _In_ BYTE prefix_count);
 
 	static BYTE analyse_reg_size_0xF7(_In_ LPBYTE candidate_address, _Inout_ LdeErrorCodes& status, _In_ BYTE prefix_count) {
 		if (!candidate_address) {
@@ -319,10 +220,7 @@ class Lde { friend FunctionTree; friend  Block;
 			return 0;
 		}
 		status = success;
-		if (isCurrentInstructionShortened(prefix_count, candidate_address)) {
-			return SIZE_OF_WORD;
-		}
-		return SIZE_OF_DWORD;
+		return isCurrentInstructionShortened(prefix_count, candidate_address) ? SIZE_OF_WORD : SIZE_OF_DWORD;
 	}
 	
 	static WORD analyseOpcodeType(_In_ LPBYTE candidate_addr, _Inout_ BYTE& InstructionContext);
