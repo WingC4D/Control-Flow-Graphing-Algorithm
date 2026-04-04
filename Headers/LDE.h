@@ -147,7 +147,7 @@ class Lde { friend FunctionTree; friend  Block;
 
 	static BYTE getValidInstructionsSizeHook(_Inout_ LPVOID& target_address, _Out_ LdeHookingState& State);
 
-	static BOOLEAN findAndFixRelocations(_Inout_ LPBYTE trampoline_gateway_address, _In_ LPVOID target_function_ptr, _In_  LdeHookingState& State);
+	static BOOLEAN findAndFixRelocations(_Inout_ LPBYTE trampoline_gateway_address, _In_  LdeHookingState& State);
 
 	static LPBYTE resolveJump(_In_ LPBYTE to_resolve_address);
 
@@ -214,7 +214,7 @@ class Lde { friend FunctionTree; friend  Block;
 
 	static BYTE analyse_group3_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, _Out_ LdeErrorCodes& status, _In_ BYTE prefix_count);
 
-	static BYTE analyse_reg_size_0xF7(_In_ LPBYTE candidate_address, _Inout_ LdeErrorCodes& status, _In_ BYTE prefix_count) {
+	static BYTE analyseRegSizeF7(_In_ LPBYTE candidate_address, _Inout_ LdeErrorCodes& status, _In_ BYTE prefix_count) {
 		if (!candidate_address) {
 			status = no_input;
 			return 0;

@@ -32,7 +32,7 @@ void Block::resize(BYTE new_size, LPBYTE new_end_address) const {
 
 void Block::findNewEnd(LPBYTE interlacing_root_ptr) const {
 	DWORD accumulated_length = 0;
-	for (BYTE last_instruction_length = 0, new_instruction_count = 0; BYTE Context : ldeState->contextsArray) {
+	for (BYTE last_instruction_length = 0, new_instruction_count = 0; BYTE Context: ldeState->contextsArray) {
 		if (landmarksPtr->root + accumulated_length == interlacing_root_ptr) {
 			if (new_instruction_count) 
 				resize(new_instruction_count, interlacing_root_ptr - last_instruction_length);
@@ -52,7 +52,7 @@ BOOLEAN FunctionTree::splitBlock(Block& BlockToSplit, LPBYTE splitting_address, 
 	BYTE  iterated_instructions_count  = 0,
 	      original_instructions_count  = BlockToSplit.ldeState->instructionCount,
 		 *split_block_root			   = BlockToSplit.landmarksPtr->root;
-	for (DWORD last_instruction_length = 0, accumulated_length = 0, new_index = static_cast<DWORD>(blocksVec.size());
+	for (DWORD new_index = static_cast<DWORD>(blocksVec.size()), last_instruction_length = 0, accumulated_length = 0;
 		 BYTE Context : BlockToSplit.ldeState->contextsArray) {
 		if (split_block_root + accumulated_length != splitting_address || !iterated_instructions_count) {
 			last_instruction_length = Lde::getInstructionLengthCtx(Context);
@@ -76,7 +76,7 @@ BOOLEAN FunctionTree::splitBlock(Block& BlockToSplit, LPBYTE splitting_address, 
 	return iterated_instructions_count != original_instructions_count;
 }
 
-AddBlock FunctionTree::addBlock(LPBYTE address_to_add, DWORD new_block_index, DWORD parent_index, DWORD height, std::map<BYTE*, Block*>& RootsMap) {
+AddBlock FunctionTree::addBlock(BYTE* const address_to_add, const DWORD new_block_index, const DWORD parent_index, const DWORD height, std::map<BYTE*, Block*>& RootsMap) {
 	if (RootsMap.contains(address_to_add)) 
 		return  was_traced;
 	auto UpperBound = RootsMap.upper_bound(address_to_add);
@@ -92,11 +92,10 @@ AddBlock FunctionTree::addBlock(LPBYTE address_to_add, DWORD new_block_index, DW
 
 fTree::ErrorCode FunctionTree::trace() {
 	using enum blk::TraceResults;
-	std::vector<DWORD>       ExplorationVec(1);
-	std::map<LPBYTE, Block*> RootsMap;
-	RootsMap[const_cast<LPBYTE>(root)] = blocksVec[0].get();
+	std::vector<DWORD> ExplorationVec(1);
+	std::map		   RootsMap{std::pair{root, blocksVec[0].get()}};
 	while (!ExplorationVec.empty()) {
-		DWORD  current_idx  =  *ExplorationVec.end()--,
+		DWORD  current_idx  = *--ExplorationVec.end(),
 			   vector_size  =  static_cast<DWORD>(blocksVec.size());
 		Block& CurrentBlock	= *blocksVec[current_idx];
 		if (vector_size == MAX_BRANCH_INDEX) 
@@ -107,25 +106,26 @@ fTree::ErrorCode FunctionTree::trace() {
 		auto traceResult = CurrentBlock.trace(newFunctionsVec);
 		if (checkIfTraced(CurrentBlock, RootsMap)) 
 			continue;
-		FunctionTreeTraceCtx TraceContext = { .rootsMap = RootsMap, .currentBlock = CurrentBlock, .explorationVec = ExplorationVec };
+		FunctionTreeTraceCtx TraceContext{ .rootsMap = RootsMap, .currentBlock = CurrentBlock, .explorationVec = ExplorationVec };
 		switch (traceResult) {
-			case reachedNonConditionalJump: {
+			case reachedJump: 
 				handleJump(Lde::resolveJump(CurrentBlock.landmarksPtr->end), vector_size, TraceContext);
 				break;
-			}
+			
 			case reachedConditionalJump: {
-				BYTE *resolved_jump			 = Lde::resolveJump(CurrentBlock.landmarksPtr->end),
-					 *next_instruction		 = CurrentBlock.landmarksPtr->end + Lde::getInstructionLengthCtx(CurrentBlock.ldeState->contextsArray[CurrentBlock.ldeState->instructionCount - 1]);
-				auto  ConditionalJumpContext = next_instruction < resolved_jump ? ConditionalJumpCtx{ .shallowPtr = next_instruction, .deepPtr = resolved_jump, .shallowIdx = vector_size | COND_BLOCK_MASK, .deepIdx = vector_size + 1 | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK }:
+				BYTE *resolved_jump			= Lde::resolveJump(CurrentBlock.landmarksPtr->end),
+					 *next_instruction		= CurrentBlock.landmarksPtr->end + Lde::getInstructionLengthCtx(CurrentBlock.ldeState->contextsArray[CurrentBlock.ldeState->instructionCount - 1]);
+				auto ConditionalJumpContext = next_instruction < resolved_jump ?
+					ConditionalJumpCtx{ .shallowPtr = next_instruction, .deepPtr = resolved_jump, .shallowIdx = vector_size | COND_BLOCK_MASK, .deepIdx = vector_size + 1 | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK }:
 					ConditionalJumpCtx{ .shallowPtr = resolved_jump, .deepPtr = next_instruction, .shallowIdx = vector_size | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK, .deepIdx = vector_size + 1 | COND_BLOCK_MASK };
 				handleJump(ConditionalJumpContext.shallowPtr, ConditionalJumpContext.shallowIdx ,TraceContext);
 				handleJump(ConditionalJumpContext.deepPtr, ConditionalJumpContext.deepIdx, TraceContext);
 				break;
 			}
-			case reachedReturn: {
+			case reachedReturn: 
 				leavesVec.push_back(CurrentBlock.getIndex());
 				break;
-			}
+			
 			case reachedCall:
 			case failed:
 			case noNewBlock: 
@@ -137,10 +137,13 @@ fTree::ErrorCode FunctionTree::trace() {
 }
 
 void Block::logIndex() const {
-	if (idx & COND_BLOCK_MASK)  idx & C_JUMP_TAKEN_MASK ?
-		std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Taken)\n", idx & MAX_BRANCH_INDEX, height):
-		std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Not Taken)\n", idx & MAX_BRANCH_INDEX, height);
-	else  height ?
+	if (idx & COND_BLOCK_MASK) {
+		idx& C_JUMP_TAKEN_MASK ?
+			std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Taken)\n", idx & MAX_BRANCH_INDEX, height) :
+			std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Not Taken)\n", idx & MAX_BRANCH_INDEX, height);
+			return;
+	}
+	height ?
 		std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Non Conditional)\n", idx & 0x00FFFFFF, height):
 		std::println("[!] Analysing Root Branch (Non Conditional)\n");
 }
@@ -170,27 +173,27 @@ blk::TraceResults Block::trace(_Out_ std::vector<BYTE*>& NewFunctionsVec) { usin
 			return failed;
 		State.prepareForNextStep();
 		switch (Lde::checkForNewBlock(State.currInstructionContext, tracing_address)) {
-		case reachedNonConditionalJump: 
-			handleEndOfTrace(tracing_address, State);
-			return reachedNonConditionalJump;
-		
-		case reachedConditionalJump: 
-			handleEndOfTrace(tracing_address, State);
-			return reachedConditionalJump;
-		
-		case reachedCall: 
-			addResolvedCall(NewFunctionsVec, Lde::resolveJump(tracing_address));
-			break;
+			case reachedJump: 
+				handleEndOfTrace(tracing_address, State);
+				return reachedJump;
+			
+			case reachedConditionalJump: 
+				handleEndOfTrace(tracing_address, State);
+				return reachedConditionalJump;
+			
+			case reachedCall: 
+				addResolvedCall(NewFunctionsVec, Lde::resolveJump(tracing_address));
+				break;
 
-		case reachedReturn: 
-			handleEndOfTrace(tracing_address, State);
-			return reachedReturn;
-		
-		case failed: 
-			return failed;
+			case reachedReturn: 
+				handleEndOfTrace(tracing_address, State);
+				return reachedReturn;
+			
+			case failed: 
+				return failed;
 
-		case noNewBlock: 
-			break;
+			case noNewBlock: 
+				break;
 		}
 		tracing_address += instruction_length;
 	}
@@ -212,26 +215,26 @@ blk::TraceResults Block::traceUntil(_Out_ std::vector<LPBYTE>& NewFunctionsVec, 
 #endif
 		State.prepareForNextStep();
 		switch (Lde::checkForNewBlock(State.currInstructionContext, reference_ptr)) {
-		case reachedNonConditionalJump: 
-			handleEndOfTrace(reference_ptr, State);
-			return reachedNonConditionalJump;
-		
-		case reachedConditionalJump: 
-			handleEndOfTrace(reference_ptr, State);
-			return reachedConditionalJump;
-		
-		case reachedCall: 
-			addResolvedCall(NewFunctionsVec, Lde::resolveJump(reference_ptr));
-			break;
+			case reachedJump: 
+				handleEndOfTrace(reference_ptr, State);
+				return reachedJump;
+			
+			case reachedConditionalJump: 
+				handleEndOfTrace(reference_ptr, State);
+				return reachedConditionalJump;
+			
+			case reachedCall: 
+				addResolvedCall(NewFunctionsVec, Lde::resolveJump(reference_ptr));
+				break;
 
-		case reachedReturn: 
-			handleEndOfTrace(reference_ptr, State);
-			return reachedReturn;
-							
-		case noNewBlock:
-			break;
-		case failed:
-			return failed;
+			case reachedReturn: 
+				handleEndOfTrace(reference_ptr, State);
+				return reachedReturn;
+								
+			case noNewBlock:
+				break;
+			case failed:
+				return failed;
 		}
 		reference_ptr += instruction_length;
 	}
@@ -256,14 +259,14 @@ void Block::print() const {
 		std::println("[!] This Branch Is Not Traced Yet.");
 		return;
 	}
-	for (DWORD accumulated_length = 0, i = 0; BYTE Context: ldeState->contextsArray) {
-		Lde::logInstructionAndAddressCtx(landmarksPtr->root + accumulated_length, Context, static_cast<BYTE>(i));
+	for (DWORD accumulated_length = 0, instruction_count = 0; BYTE Context: ldeState->contextsArray) {
+		Lde::logInstructionAndAddressCtx(landmarksPtr->root + accumulated_length, Context, static_cast<BYTE>(instruction_count));
 		accumulated_length += Lde::getInstructionLengthCtx(Context);
-		if (i >= BLOCK_MAX_INSTRUCTIONS) {
+		if (instruction_count >= BLOCK_MAX_INSTRUCTIONS) {
 			std::println("Hit an error while printing Block #{:03d}", idx);
 			return;
 		}
-		i++;
+		instruction_count++;
 	}
 }
 
@@ -295,7 +298,7 @@ void FunctionTree::transferUniqueChildren(Block& OldParentBlock, Block& NewParen
 	}
 }
 
-void FunctionTree::handleJump(const LPBYTE resolved_address, const DWORD new_block_idx, const FunctionTreeTraceCtx& TraceContext) {
+void FunctionTree::handleJump(BYTE* const resolved_address, const DWORD new_block_idx, const FunctionTreeTraceCtx& TraceContext) {
 	switch (addBlock(resolved_address, new_block_idx, TraceContext.currentBlock.getIndex(), TraceContext.currentBlock.height + 1, TraceContext.rootsMap)) {
 		case added: {
 			DWORD last_index = static_cast<DWORD>(blocksVec.size()) - 1;
@@ -304,10 +307,10 @@ void FunctionTree::handleJump(const LPBYTE resolved_address, const DWORD new_blo
 			TraceContext.rootsMap[resolved_address] = blocksVec[last_index].get();
 			break;
 		}
-		case was_traced: {
+		case was_traced: 
 			TraceContext.rootsMap.at(resolved_address)->flowFromVec.emplace_back(TraceContext.currentBlock.getIndex());
 			break;
-		}
+		
 		case split: 
 			break;
 	}

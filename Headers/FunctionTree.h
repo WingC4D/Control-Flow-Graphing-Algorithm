@@ -16,7 +16,7 @@ namespace blk {
 		noNewBlock,
 		reachedReturn,
 		reachedConditionalJump,
-		reachedNonConditionalJump,
+		reachedJump,
 		reachedCall,
 		failed
 	};
@@ -64,16 +64,12 @@ struct Block {
 	std::vector<DWORD>				flowFromVec;
 	std::vector<DWORD>				flowToVec;
 
-
-
 	Block(LPBYTE root_address, DWORD parent_index, DWORD index, DWORD height_):
-	landmarksPtr(std::make_unique<BlockLandmarks>(root_address)), ldeState(std::make_unique<LdeState>()),
-	flowFromVec(0), flowToVec(0) {
+	landmarksPtr(std::make_unique<BlockLandmarks>(root_address)), ldeState(std::make_unique<LdeState>()),flowFromVec(0), flowToVec(0) {
 		idx    = index;
 		height = height_;
-		if (parent_index != 0xFFFFFFFF) {
+		if (parent_index != 0xFFFFFFFF)
 			flowFromVec.emplace_back(parent_index);
-		}
 	}
 	void print() const; 
 
@@ -145,10 +141,10 @@ struct FunctionTree {
 
 	inline BOOLEAN checkIfTraced(Block& JustTracedBlock, std::map<BYTE*, Block*>& RootsMap) const;
 
-	void handleJump(LPBYTE resolved_address, DWORD new_block_idx, const FunctionTreeTraceCtx& TraceContext);
+	void handleJump(BYTE* resolved_address, DWORD new_block_idx, const FunctionTreeTraceCtx& TraceContext);
 
-	void print() {
-		for (std::unique_ptr<Block>& block: blocksVec) {
+	void print() const {
+		for (auto& block: blocksVec) {
 			block->logIndex();
 			block->print();
 			std::println();
