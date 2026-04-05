@@ -175,7 +175,7 @@ class Lde { friend FunctionTree; friend  Block;
 
 	inline static void resetHookingContexts(_Inout_ LdeHookingState& State);
 
-	inline static void set_curr_ctx_bRex_w(_Inout_ BYTE& InstructionContext);
+	inline static void setRex_wCtx(_Inout_ BYTE& InstructionContext);
 
 	inline static void setContextRipRel(_Inout_ BYTE& CandidateContext);
 
@@ -204,11 +204,11 @@ class Lde { friend FunctionTree; friend  Block;
 
 	static void log_1(_In_ const LPBYTE reference_address, _In_ const LdeHookingState& State);
 
-	static BYTE analyse_special_group(_In_ LPBYTE candidate_address, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
+	static BYTE analyseSpecialGroup(_In_ LPBYTE candidate_address, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
 
-	static BYTE analyse_mod_rm(_In_ LPBYTE preceding_byte_ptr, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
+	static BYTE analyseModRm(_In_ LPBYTE preceding_byte_ptr, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
 
-	static BYTE analyse_group3_mod_rm(_In_ const LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, _Out_ LdeErrorCodes& status, _In_ BYTE prefix_count);
+	static BYTE analyseGroup3(_In_ const LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, _Out_ LdeErrorCodes& status, _In_ BYTE prefix_count);
 
 	static BYTE analyseRegSizeF7(_In_ LPBYTE candidate_address, _Inout_ LdeErrorCodes& status, _In_ BYTE prefix_count) {
 		if (!candidate_address) {
