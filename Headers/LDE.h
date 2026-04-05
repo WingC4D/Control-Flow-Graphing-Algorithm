@@ -67,14 +67,10 @@ namespace opcodes {
 				   CALL	  = 0xE8;
 }
 
-interface LdeCommon {
-	LdeErrorCodes    status = success;
-	BYTE			 currInstructionContext = 0,
-					 instructionCount = 0;
-public:
-	virtual BYTE getCurrentPrefixCount() = 0;
-	virtual ~LdeCommon() = default;
-	virtual void prepareForNextStep() = 0;
+struct LdeCommon {
+	LdeErrorCodes status				 = success;
+	BYTE		  currInstructionContext = 0,
+				  instructionCount		 = 0;
 };
 
 struct LdeHookingState: LdeCommon {
@@ -84,11 +80,11 @@ struct LdeHookingState: LdeCommon {
 		   prefixCountArray[RELATIVE_TRAMPOLINE_SIZE]{},
 		   ripRelativeIndexesArray[RELATIVE_TRAMPOLINE_SIZE]{};
 	LdeHookingState(LPVOID target_address): functionAddress(target_address) {}
-	BYTE getCurrentPrefixCount() override {
+	BYTE getCurrentPrefixCount()const {
 		return static_cast<unsigned char>(prefixCountArray[instructionCount] & 0x0F);
 	}
 
-	void prepareForNextStep() override {
+	void prepareForNextStep() {
 		contextsArray[instructionCount] = currInstructionContext;
 		currInstructionContext = 0;
 		instructionCount++;
@@ -107,10 +103,10 @@ struct LdeState: LdeCommon {
 		instructionCount	   = 0;
 		newBlocksCount		   = 0;
 	}
-	BYTE getCurrentPrefixCount() override {
+	BYTE getCurrentPrefixCount() const {
 		return static_cast<unsigned char>(prefixCountArray[instructionCount] & 0x0F);
 	}
-	void prepareForNextStep() override {
+	void prepareForNextStep() {
 		contextsArray[instructionCount] = currInstructionContext;
 		currInstructionContext			= 0;
 		instructionCount++;
@@ -126,11 +122,11 @@ struct LdeJumpResolutionState: LdeCommon {
 
 	LdeJumpResolutionState(LPVOID lpTarget): toResolve(lpTarget) {}
 
-	BYTE getCurrentPrefixCount() override {
+	BYTE getCurrentPrefixCount() const {
 		return static_cast<unsigned char>(prefixCountArray[0] & 0x0F);
 	}
 
-	void prepareForNextStep() override {
+	void prepareForNextStep() {
 		contextsArray[0]	   = currInstructionContext;
 		currInstructionContext = 0;
 		instructionCount	   = 1;
@@ -149,7 +145,7 @@ class Lde { friend FunctionTree; friend  Block;
 
 	static BOOLEAN findAndFixRelocations(_Inout_ LPBYTE trampoline_gateway_address, _In_  LdeHookingState& State);
 
-	static LPBYTE resolveJump(_In_ LPBYTE to_resolve_address);
+	static LPBYTE resolveJump(_In_ LPBYTE address_to_resolve);
 
 	static blk::TraceResults checkForNewBlock(BYTE& InstructionContext, LPBYTE lpReference);
 
@@ -206,13 +202,13 @@ class Lde { friend FunctionTree; friend  Block;
 	template<typename STATE>
 	static void log_2(_In_ BYTE instruction_count, _In_ STATE& State);
 
-	static void log_1(_In_ LPBYTE reference_address, _In_ LdeHookingState& State);
+	static void log_1(_In_ const LPBYTE reference_address, _In_ const LdeHookingState& State);
 
 	static BYTE analyse_special_group(_In_ LPBYTE candidate_address, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
 
 	static BYTE analyse_mod_rm(_In_ LPBYTE preceding_byte_ptr, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
 
-	static BYTE analyse_group3_mod_rm(_In_ LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, _Out_ LdeErrorCodes& status, _In_ BYTE prefix_count);
+	static BYTE analyse_group3_mod_rm(_In_ const LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, _Out_ LdeErrorCodes& status, _In_ BYTE prefix_count);
 
 	static BYTE analyseRegSizeF7(_In_ LPBYTE candidate_address, _Inout_ LdeErrorCodes& status, _In_ BYTE prefix_count) {
 		if (!candidate_address) {

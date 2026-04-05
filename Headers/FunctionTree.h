@@ -21,8 +21,8 @@ namespace blk {
 		failed
 	};
 }
-constexpr DWORD NEW_FUNCTIONS_BASE_SIZE = 0x00,
 
+constexpr DWORD NEW_FUNCTIONS_BASE_SIZE = 0x00,
 			    ENDS_UNCOND_JUMP		= 0x20000000,
 				COND_BLOCK_MASK		    = 0X80000000,
 				C_JUMP_TAKEN_MASK		= 0X40000000,
@@ -31,25 +31,28 @@ constexpr DWORD NEW_FUNCTIONS_BASE_SIZE = 0x00,
 
 struct BlockPrerequisites {
 	LPBYTE root;
-	DWORD  index,
-		   parentIndex,
+	DWORD  idx,
+		   parent_idx,
 		   height;
 
-	BlockPrerequisites(LPBYTE candidate_address, DWORD new_index, DWORD parent_index, DWORD height):
-	root(candidate_address),
-	index(new_index),
-	parentIndex(parent_index),
-	height(height) {
+	BlockPrerequisites(const LPBYTE candidate_address, const DWORD index, const DWORD parent_index, const DWORD prq_height) {
+		root	   = candidate_address;
+		idx		   = index;
+		parent_idx = parent_index;
+		height	   = prq_height;
 	}
 };
 
 struct BlockLandmarks { 
-	BYTE* const root;
-	BYTE *end;
+	BYTE* const root,
+			   *end;
 
-	BlockLandmarks(LPBYTE root_address, LPBYTE end_address = nullptr): root(root_address), end(end_address){}
+	BlockLandmarks(const LPBYTE root_address, const LPBYTE end_address = nullptr): root(root_address) {
+		end = end_address;
+	}
+
 	BYTE* getRoot() const {
-		return root;
+		return const_cast<BYTE*>(root);
 	}
 };
 
@@ -61,11 +64,12 @@ struct Block {
 	std::vector<DWORD>				flowFromVec;
 	std::vector<DWORD>				flowToVec;
 
-	Block(LPBYTE root_address, DWORD parent_index, DWORD index, DWORD height_): landmarksPtr(std::make_unique<BlockLandmarks>(root_address)), ldeState(std::make_unique<LdeState>()),flowFromVec(0), flowToVec(0) {
-		idx    = index;
-		height = height_;
+	Block(const LPBYTE root_address, DWORD parent_index, DWORD index, DWORD blk_height):
+	landmarksPtr(std::make_unique<BlockLandmarks>(root_address)), ldeState(std::make_unique<LdeState>()), flowFromVec(0), flowToVec(0) {
 		if (parent_index != 0xFFFFFFFF)
 			flowFromVec.emplace_back(parent_index);
+		idx    = index;
+		height = blk_height;
 	}
 
 	void print() const; 
@@ -116,24 +120,24 @@ namespace fnt {
 		failed
 	};
 }
-struct FunctionTree {
-	
-	std::vector<std::unique_ptr<Block>> blocksVec;
-	std::vector<BYTE*> newFunctionsVec;
-	LPBYTE const root;
-	std::vector<DWORD>leavesVec;
 
-	FunctionTree(LPVOID lpFunctionRoot): blocksVec(0), newFunctionsVec(NEW_FUNCTIONS_BASE_SIZE), root(static_cast<BYTE*>(lpFunctionRoot)), leavesVec(0) {
-		blocksVec.emplace_back(std::make_unique<Block>(root, 0xFFFFFFFF, 0, 0));
+struct FunctionTree {
+	LPBYTE						  const root;
+	std::vector<std::unique_ptr<Block>> blocksVec;
+	std::vector<BYTE*>					newFunctionsVec;
+	std::vector<DWORD>					leavesVec;
+
+	FunctionTree(LPVOID lpFunctionRoot): root(static_cast<BYTE*>(lpFunctionRoot)), blocksVec(1), newFunctionsVec(NEW_FUNCTIONS_BASE_SIZE), leavesVec(0) {
+		blocksVec[0] = std::make_unique<Block>(root, 0xFFFFFFFF, 0, 0);
 	}
 
 	fnt::ErrorCode trace();
 
 	inline BOOLEAN splitBlock(Block& BlockToSplit, LPBYTE splitting_address, std::map<BYTE*, Block*>& RootsMap);
 
-	AddBlock addBlock(LPBYTE address_to_add, DWORD new_block_index, DWORD parent_index, DWORD height, std::map<BYTE*, Block*>& RootsMap);
+	AddBlock addBlock(LPBYTE address_to_add, DWORD index, DWORD parent_index, DWORD height, std::map<BYTE*, Block*>& RootsMap);
 
-	void transferUniqueChildren(Block& OldParentBlock, Block& NewParentBlock) const;
+	void transferUniqueChildren(Block& OldParent, Block& NewParent) const;
 
 	inline BOOLEAN checkIfTraced(Block& JustTracedBlock, std::map<BYTE*, Block*>& RootsMap) const;
 

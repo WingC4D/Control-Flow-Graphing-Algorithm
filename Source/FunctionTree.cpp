@@ -22,12 +22,12 @@ BOOLEAN Block::isInstructionHead(const LPBYTE candidate_address) const {
 }
 
 void Block::resize(const BYTE new_size, const LPBYTE new_end_address) const {
-	if (new_size && new_end_address) {
-		landmarksPtr->end		   = new_end_address;
-		ldeState->instructionCount = new_size;
-		ldeState->contextsArray.resize(new_size);
-		ldeState->prefixCountArray.resize(new_size);
-	}
+	if (!new_size || !new_end_address) 
+		return;
+	landmarksPtr->end		   = new_end_address;
+	ldeState->instructionCount = new_size;
+	ldeState->contextsArray.resize(new_size);
+	ldeState->prefixCountArray.resize(new_size);
 }
 
 void Block::findNewEnd(const LPBYTE interlacing_root_ptr) const {
@@ -49,12 +49,13 @@ BOOLEAN FunctionTree::splitBlock(Block& BlockToSplit, const LPBYTE splitting_add
 	if (!BlockToSplit.isInRange(splitting_address)) 
 		return false;
 #endif
+	if (!splitting_address)
+		return false;
 	BYTE  iterated_instructions_count = 0,
-	      original_instructions_count = BlockToSplit.ldeState->instructionCount,
-		 *split_block_root			  = BlockToSplit.landmarksPtr->root;
-	for (DWORD new_index = static_cast<DWORD>(blocksVec.size()), last_instruction_length = 0, accumulated_length = 0;
-		 BYTE Context: BlockToSplit.ldeState->contextsArray) {
-		if (split_block_root + accumulated_length != splitting_address || !iterated_instructions_count) {
+	      original_instructions_count = BlockToSplit.ldeState->instructionCount;
+	for (DWORD new_index = static_cast<DWORD>(blocksVec.size()), last_instruction_length = 0, accumulated_length = 0; 
+		 BYTE  Context: BlockToSplit.ldeState->contextsArray) {
+		if (BlockToSplit.landmarksPtr->root + accumulated_length != splitting_address || !iterated_instructions_count) {
 			last_instruction_length = Lde::getInstructionLengthCtx(Context);
 			accumulated_length	   += last_instruction_length;
 			iterated_instructions_count++;
@@ -76,17 +77,17 @@ BOOLEAN FunctionTree::splitBlock(Block& BlockToSplit, const LPBYTE splitting_add
 	return iterated_instructions_count != original_instructions_count;
 }
 
-AddBlock FunctionTree::addBlock(BYTE* const address_to_add, const DWORD new_block_index, const DWORD parent_index, const DWORD height, std::map<BYTE*, Block*>& RootsMap) {
+AddBlock FunctionTree::addBlock(BYTE* const address_to_add, const DWORD index, const DWORD parent_index, const DWORD height, std::map<BYTE*, Block*>& RootsMap) {
 	if (RootsMap.contains(address_to_add)) 
 		return was_traced;
 	auto UpperBound = RootsMap.upper_bound(address_to_add);
 	if (UpperBound != RootsMap.begin()) {
 		Block& PreviousBlock = *(--UpperBound)->second;
-		if (PreviousBlock.isInRange(address_to_add)) 
+		if (PreviousBlock.isInRange(address_to_add))
 			if (splitBlock(PreviousBlock, address_to_add, RootsMap)) 
 				return split;
 	}
-	blocksVec.emplace_back(std::make_unique<Block>(address_to_add, parent_index, new_block_index, height));
+	blocksVec.emplace_back(std::make_unique<Block>(address_to_add, parent_index, index, height));
 	return added;
 }
 
@@ -94,9 +95,8 @@ fnt::ErrorCode FunctionTree::trace() { using enum blk::TraceResults;
 	std::vector<DWORD> ExplorationVec(1);
 	std::map		   RootsMap{std::pair{root, blocksVec[0].get()}};
 	while (!ExplorationVec.empty()) {
-		DWORD  current_idx  = *--ExplorationVec.end(),
-			   vector_size  =  static_cast<DWORD>(blocksVec.size());
-		Block& CurrentBlock	= *blocksVec[current_idx];
+		DWORD  vector_size  =  static_cast<DWORD>(blocksVec.size());
+		Block& CurrentBlock	= *blocksVec[*--ExplorationVec.end()];
 		if (vector_size == MAX_BRANCH_INDEX) 
 			return fnt::failed;
 		ExplorationVec.pop_back();
@@ -112,9 +112,9 @@ fnt::ErrorCode FunctionTree::trace() { using enum blk::TraceResults;
 				break;
 			
 			case reachedConditionalJump: {
-				BYTE *resolved_jump			= Lde::resolveJump(CurrentBlock.landmarksPtr->end),
-					 *next_instruction		= CurrentBlock.landmarksPtr->end + Lde::getInstructionLengthCtx(CurrentBlock.ldeState->contextsArray[CurrentBlock.ldeState->instructionCount - 1]);
-				auto ConditionalJumpContext = next_instruction < resolved_jump ?
+				LPBYTE resolved_jump		  = Lde::resolveJump(CurrentBlock.landmarksPtr->end),
+					   next_instruction		  = CurrentBlock.landmarksPtr->end + Lde::getInstructionLengthCtx(*--CurrentBlock.ldeState->contextsArray.end());
+				auto   ConditionalJumpContext = next_instruction < resolved_jump ?
 					ConditionalJumpCtx{ .shallowPtr = next_instruction, .deepPtr = resolved_jump, .shallowIdx = vector_size | COND_BLOCK_MASK, .deepIdx = vector_size + 1 | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK }:
 					ConditionalJumpCtx{ .shallowPtr = resolved_jump, .deepPtr = next_instruction, .shallowIdx = vector_size | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK, .deepIdx = vector_size + 1 | COND_BLOCK_MASK };
 				handleJump(ConditionalJumpContext.shallowPtr, ConditionalJumpContext.shallowIdx ,TraceContext);
@@ -147,7 +147,7 @@ void Block::logIndex() const {
 
 void Block::addResolvedCall(std::vector<unsigned char*>& NewFunctionVec, unsigned char* resolved_address) {
 	BOOLEAN was_added = false;
-	for (BYTE* stored_func_address: NewFunctionVec) 
+	for (LPBYTE stored_func_address: NewFunctionVec) 
 		if ((was_added = stored_func_address == resolved_address)) 
 			break;
 
@@ -198,19 +198,18 @@ blk::TraceResults Block::trace(_Out_ std::vector<BYTE*>& NewFunctionsVec) { usin
 	return failed;
 }
 
-blk::TraceResults Block::traceUntil(_Out_ std::vector<LPBYTE>& NewFunctionsVec, _In_ const LPBYTE until_address) { using enum blk::TraceResults;
+blk::TraceResults Block::traceUntil(_Out_ std::vector<LPBYTE>& NewFunctionsVec, const LPBYTE until_address) { using enum blk::TraceResults;
 	LdeState State;
-	BYTE	*reference_ptr	    = landmarksPtr->root,
-			 instruction_length = 0;
+	LPBYTE   reference_ptr = landmarksPtr->getRoot();
+	if (reference_ptr == until_address) 
+		return failed;
+	
 	while (State.instructionCount < BLOCK_MAX_INSTRUCTIONS && until_address >= reference_ptr) {
-		if (reference_ptr == until_address && instruction_length) {
+		if (reference_ptr == until_address) {
 			handleEndOfTrace(reference_ptr, State);
 			return noNewBlock;
 		}
-		instruction_length = Lde::mapInstructionLength(reference_ptr, State.currInstructionContext, State.status, State.prefixCountArray[State.instructionCount]);
-#ifdef DEBUG
-		Lde::logInstructionAndAddress(reference_ptr, State);
-#endif
+		BYTE instruction_length = Lde::mapInstructionLength(reference_ptr, State.currInstructionContext, State.status, State.prefixCountArray[State.instructionCount]);
 		State.prepareForNextStep();
 		switch (Lde::checkForNewBlock(State.currInstructionContext, reference_ptr)) {
 			case reachedJump: 
@@ -272,27 +271,27 @@ DWORD Block::getIndex() const {
 	return idx & MAX_BRANCH_INDEX;
 }
 
-void FunctionTree::transferUniqueChildren(Block& OldParentBlock, Block& NewParentBlock) const {
-	if (OldParentBlock.flowToVec.empty()) {
-		OldParentBlock.flowToVec.emplace_back(NewParentBlock.getIndex());
-		NewParentBlock.flowFromVec.emplace_back(OldParentBlock.getIndex());
+void FunctionTree::transferUniqueChildren(Block& OldParent, Block& NewParent) const {
+	if (OldParent.flowToVec.empty()) {
+		OldParent.flowToVec.emplace_back(NewParent.getIndex());
+		NewParent.flowFromVec.emplace_back(OldParent.getIndex());
 		return;
 	}
 	BOOLEAN transferred_parent = false;
-	for (DWORD child_idx: OldParentBlock.flowToVec) {
+	for (DWORD child_idx: OldParent.flowToVec) {
 		for (BYTE parentsVec_idx = 0; DWORD parent_idx: blocksVec[child_idx]->flowFromVec) {
-			if (parent_idx == OldParentBlock.getIndex()) {
-				blocksVec[child_idx]->flowFromVec[parentsVec_idx] = NewParentBlock.getIndex();
+			if (parent_idx == OldParent.getIndex()) {
+				blocksVec[child_idx]->flowFromVec[parentsVec_idx] = NewParent.getIndex();
 				break;
 			}
 			parentsVec_idx++;
 		}
 		transferred_parent = true;
-		NewParentBlock.flowToVec.emplace_back(child_idx);
+		NewParent.flowToVec.emplace_back(child_idx);
 	}
 	if (transferred_parent) {
-		OldParentBlock.flowToVec.clear();
-		OldParentBlock.flowToVec.emplace_back(NewParentBlock.getIndex());
+		OldParent.flowToVec.clear();
+		OldParent.flowToVec.emplace_back(NewParent.getIndex());
 	}
 }
 

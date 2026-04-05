@@ -1,6 +1,6 @@
 #include "Lde.h"
 
-BYTE Lde::mapInstructionLength(LPVOID analysis_address, BYTE& InstructionContext, LdeErrorCodes& status, BYTE& prefix_count) { //Main instruction decoding dispatcher
+BYTE Lde::mapInstructionLength(const LPVOID analysis_address, BYTE& InstructionContext, LdeErrorCodes& status, BYTE& prefix_count) { //Main instruction decoding dispatcher
 	if (!analysis_address) {
 		status = no_input;
 		return 0;
@@ -80,7 +80,7 @@ BYTE Lde::mapInstructionLength(LPVOID analysis_address, BYTE& InstructionContext
 				setContextRipRel(InstructionContext);
 				setCurrentInstructionLength(prefix_count + getOpcodeLenCtx(InstructionContext) + isCurrentInstructionShortened(prefix_count, reference_address) ? SIZE_OF_WORD : SIZE_OF_DWORD, InstructionContext);
 			} else if (isRexCtx(InstructionContext)) {
-				if (*(reference_address - (getOpcodeLenCtx(InstructionContext) - SIZE_OF_BYTE)) & 0x48) {
+				if ((*(reference_address - (getOpcodeLenCtx(InstructionContext) - 1)) & 0x48) == 0x48) {
 					setCurrentInstructionLength(getOpcodeLenCtx(InstructionContext) + prefix_count + SIZE_OF_QWORD, InstructionContext);
 					break;
 				}
@@ -102,22 +102,20 @@ BYTE Lde::mapInstructionLength(LPVOID analysis_address, BYTE& InstructionContext
 			status = wrong_input;
 			std::println ("[?] WTH Is Going On?");
 			return 0;
-		
 	}
 	status = success;
 	return getInstructionLengthCtx(InstructionContext);
 }
-BYTE Lde::analyse_mod_rm(LPBYTE preceding_byte_ptr, BYTE& InstructionContext, LdeErrorCodes& status) {
-	preceding_byte_ptr++;
-	BYTE rm_bits			 = *preceding_byte_ptr & RM_MASK,
-		 reg_bits			 = *preceding_byte_ptr & REG_MASK,
-	     mod_bits			 = *preceding_byte_ptr & MOD_MASK,
-		 added_opcode_length = 0;
-	status = success;
+
+BYTE Lde::analyse_mod_rm(const LPBYTE preceding_byte_ptr, BYTE& InstructionContext, LdeErrorCodes& status) {
 	if (!preceding_byte_ptr) {
 		status = no_input;
 		return 0;
 	}
+	BYTE rm_bits			 = *(preceding_byte_ptr + 1) & RM_MASK,
+		 reg_bits			 = *(preceding_byte_ptr + 1) & REG_MASK,
+	     mod_bits			 = *(preceding_byte_ptr + 1) & MOD_MASK,
+		 added_opcode_length = 0;
 	switch (mod_bits) {
 		case 0xC0: 
 			break;
@@ -156,8 +154,8 @@ BYTE Lde::analyse_mod_rm(LPBYTE preceding_byte_ptr, BYTE& InstructionContext, Ld
 				break;
 			}
 			break;
-		
 	}
+	status = success;
 	return added_opcode_length;
 }
 
@@ -203,15 +201,14 @@ BYTE Lde::analyse_special_group(LPBYTE candidate_address, BYTE& InstructionConte
 	return 1 + analyse_mod_rm(candidate_address, InstructionContext, status);
 }
 
-BYTE Lde::analyse_group3_mod_rm(LPBYTE lpCandidate, BYTE& InstructionContext, LdeErrorCodes& status, BYTE prefix_count){
-	if (!*lpCandidate) {
+BYTE Lde::analyse_group3_mod_rm(const LPBYTE lpCandidate, BYTE& InstructionContext, LdeErrorCodes& status, const BYTE prefix_count){
+	if (!lpCandidate) {
 		status = no_input;
 		return 0;
 	}
-	status						= success;
-	BYTE reg_bits				= *(lpCandidate + SIZE_OF_BYTE) & REG_MASK,
-		 rm_bits				= *(lpCandidate + SIZE_OF_BYTE) & RM_MASK,
-		 mod_bits				= *(lpCandidate + SIZE_OF_BYTE) & MOD_MASK,
+	BYTE reg_bits				= *(lpCandidate + 1) & REG_MASK,
+		 rm_bits				= *(lpCandidate + 1) & RM_MASK,
+		 mod_bits				= *(lpCandidate + 1) & MOD_MASK,
 		 added_opcode_length	= 0,
 		 added_immediate_length	= 0;
 	switch (*lpCandidate) {
@@ -223,7 +220,7 @@ BYTE Lde::analyse_group3_mod_rm(LPBYTE lpCandidate, BYTE& InstructionContext, Ld
 					break;
 				
 				case 0x80: 
-					added_immediate_length ++;
+					added_immediate_length++;
 					if (rm_bits == 4) {
 						incrementOpcodeLenCtx(InstructionContext, status);
 						added_opcode_length += SIZE_OF_DWORD;
@@ -302,33 +299,34 @@ BYTE Lde::analyse_group3_mod_rm(LPBYTE lpCandidate, BYTE& InstructionContext, Ld
 }
 
 
-LPBYTE Lde::resolveJump(_In_ LPBYTE to_resolve_address) {
-	LdeJumpResolutionState State(to_resolve_address);
+LPBYTE Lde::resolveJump(_In_ LPBYTE address_to_resolve) {
+	if (!address_to_resolve)
+		return address_to_resolve;
+	LdeJumpResolutionState State(address_to_resolve);
 	if (!mapInstructionLength(State.toResolve, State.currInstructionContext, State.status, State.prefixCountArray[State.instructionCount]))
 		return nullptr;
 	State.contextsArray[0]	   = State.currInstructionContext;
 	BYTE   instruction_length  = getInstructionLengthCtx(State.currInstructionContext),
 		   opcode_length	   = getOpcodeLenCtx(State.currInstructionContext),
 		   disposition_size	   = instruction_length - State.getCurrentPrefixCount() - opcode_length;
-	LPVOID disposition_address = to_resolve_address + instruction_length - disposition_size,
-		   result;
-	switch (analyseOpcodeType(to_resolve_address, State.currInstructionContext)) {
+	LPVOID disposition_address = address_to_resolve + instruction_length - disposition_size,
+		   result			   = nullptr;
+	switch (analyseOpcodeType(address_to_resolve, State.currInstructionContext)) {
 		case _short | jump:
 		case _near  | jump:
 		case call:
 		case jump:
 		case conditional | jump | _short: 
 			switch (disposition_size) {
-				case SIZE_OF_BYTE: {
-					result = to_resolve_address + *static_cast<CHAR*>(disposition_address) + instruction_length;
+				case SIZE_OF_BYTE: 
+					result = address_to_resolve + *static_cast<signed char *>(disposition_address) + instruction_length;
 					break;
-				}
-				case SIZE_OF_DWORD: {
-					result = to_resolve_address + *static_cast<INT*>(disposition_address) + instruction_length;
+				
+				case SIZE_OF_DWORD: 
+					result = address_to_resolve + *static_cast<LPINT>(disposition_address) + instruction_length;
 					break;
-				}
-				default: 
-					result = nullptr;
+				
+				default:
 					break;
 			}
 			break;
@@ -339,27 +337,24 @@ LPBYTE Lde::resolveJump(_In_ LPBYTE to_resolve_address) {
 		case indirect_far_call: 
 			switch (disposition_size) {
 				case SIZE_OF_BYTE: 
-					result = *reinterpret_cast<LPVOID*>(to_resolve_address + *static_cast<CHAR*>(disposition_address) + instruction_length);
+					result = *reinterpret_cast<LPVOID*>(address_to_resolve + *static_cast<CHAR*>(disposition_address) + instruction_length);
 					break;
 				
 				case SIZE_OF_DWORD: 
-					result = *reinterpret_cast<LPVOID*>(to_resolve_address + *static_cast<INT*>(disposition_address) + instruction_length);
+					result = *reinterpret_cast<LPVOID*>(address_to_resolve + *static_cast<INT*>(disposition_address) + instruction_length);
 					break;
 				
-				default: 
-					result = nullptr;
+				default:
 					break;
 			}
-			break;
 
-		default: 
-			result = nullptr;
+		default:
 			break;
 	}
 	return static_cast<BYTE*>(result);
 }
 
-BYTE Lde::getValidInstructionsSizeHook(_Inout_ LPVOID&target_address, _Out_ LdeHookingState& State) {
+BYTE Lde::getValidInstructionsSizeHook(_Inout_ LPVOID& target_address, _Out_ LdeHookingState& State) {
 	if (!target_address) {
 		State.status = no_input;
 		return 0;
@@ -492,29 +487,29 @@ LPBYTE Lde::analyseRedirectingInstruction(const DWORD accumulated_length, _Inout
 }
 
 
-void Lde::log_1(_In_ const LPBYTE reference_address, _In_ LdeHookingState& State) {
+void Lde::log_1(_In_ const LPBYTE reference_address, _In_ const LdeHookingState& State) {
 	BYTE accumulated_length	= reference_address - State.functionAddress,
 		 instruction_length	= getInstructionLengthCtx(State.currInstructionContext),
 		 opcode_length		= getOpcodeLenCtx(State.currInstructionContext),
 		 prefix_count		= State.getCurrentPrefixCount(),
-		 i = 0;
+		 passed_bytes		= 0;
 	std::println("[i] Current Instruction Length:      {:#04X}\n[i] Accumulated Instructions Length: {:#06X}", instruction_length, accumulated_length, *reference_address);
 	std::cout << "[i]";
 	if (prefix_count) {
 		std::cout << " Found Prefix Bytes: ";
-		for (; i < prefix_count; i++) 
-			std::cout << std::format("{:#4X} ", *(reference_address + i));
+		for (; passed_bytes < prefix_count; passed_bytes++) 
+			std::cout << std::format("{:#4X} ", *(reference_address + passed_bytes));
 		std::cout << " | ";
 	}
 	if (opcode_length) {
 		std::cout << "Found Opcode Bytes: ";
-		for (; i < prefix_count + opcode_length; i++)
-			std::cout << std::format("{:#X} ", *(reference_address + i));
+		for (; passed_bytes < prefix_count + opcode_length; passed_bytes++)
+			std::cout << std::format("{:#X} ", *(reference_address + passed_bytes));
 	}
 	if (getInstructionLengthCtx(State.currInstructionContext) > opcode_length + prefix_count) {
 		std::cout << " | Found Operands Bytes: ";
-		for (; i < instruction_length; i++) 
-			std::cout << std::format("{:#04X} ", *(reference_address + i));
+		for (; passed_bytes < instruction_length; passed_bytes++) 
+			std::cout << std::format("{:#04X} ", *(reference_address + passed_bytes));
 	}
 	std::cout << "\n\n";
 }
@@ -541,20 +536,20 @@ void Lde::logInstructionAndAddressCtx(const LPBYTE reference_address, const BYTE
 	std::cout << "\n";
 }
 
-BOOLEAN Lde::findAndFixRelocations(_Inout_ LPBYTE trampoline_gateway_address, _In_ LdeHookingState& State) {
-	for (BYTE array_idx = 0, accumulated_length = 0, passed_instructions = 0, *rip_relative_address = static_cast<LPBYTE>(State.functionAddress);
-		 BYTE rip_relative_idx: State.ripRelativeIndexesArray) {
+BOOLEAN Lde::findAndFixRelocations(_Inout_ const LPBYTE trampoline_gateway_address, _In_ LdeHookingState& State) {
+	if (!trampoline_gateway_address)
+		return false;
+	for (BYTE array_idx = 0, accumulated_length = 0, instructions_passed = 0, *rip_relative_address = static_cast<LPBYTE>(State.functionAddress); BYTE rip_relative_idx: State.ripRelativeIndexesArray) {
 		if (array_idx >= State.ripIndexesCount) 
 			break;
-		for (BYTE instruction_length; passed_instructions < rip_relative_idx; passed_instructions++) {
-			instruction_length		= getInstructionLengthCtx(State.contextsArray[passed_instructions]);
+		for (BYTE instruction_length; instructions_passed < rip_relative_idx; instructions_passed++) {
+			instruction_length		= getInstructionLengthCtx(State.contextsArray[instructions_passed]);
 			accumulated_length	   += instruction_length;
 			rip_relative_address   += instruction_length;
-			
 		}
-		BYTE   instruction_length		= getInstructionLengthCtx(State.contextsArray[passed_instructions]),
-			   opcode_length			= get_index_opcode_len(passed_instructions, State),
-			   prefix_count				= State.prefixCountArray[passed_instructions],
+		BYTE   instruction_length		= getInstructionLengthCtx(State.contextsArray[instructions_passed]),
+			   opcode_length			= get_index_opcode_len(instructions_passed, State),
+			   prefix_count				= State.prefixCountArray[instructions_passed],
 			  *old_target_address		= rip_relative_address + instruction_length + *reinterpret_cast<int*>(rip_relative_address + prefix_count + opcode_length);
 		hkUINT new_disposition_unsigned = old_target_address - (trampoline_gateway_address + accumulated_length + instruction_length);
 		if (new_disposition_unsigned < TWO_GIGABYTES) {
@@ -596,22 +591,21 @@ void Lde::setContextRipRel(_Inout_ BYTE& CandidateContext) {
 }
 
 void Lde::incrementInstructionLen(_Inout_ BYTE& CandidateContext, _Inout_ LdeErrorCodes& Status) {
-	if ((CandidateContext & 0x3C) < 0x3C) {
-		BYTE new_instruction_length = static_cast<BYTE>((getInstructionLengthCtx(CandidateContext) + 1) << 2);
-		CandidateContext		   &= 0xC3;
-		CandidateContext		   |= new_instruction_length;
-	} else {
+	if ((CandidateContext & 0x3C) == 0x3C) {
 		Status = instruction_overflow;
+		return;
 	}
+	CandidateContext &= 0xC3;
+	CandidateContext |= static_cast<BYTE>((getInstructionLengthCtx(CandidateContext) + 1) << 2);
 }
 
 void Lde::incrementOpcodeLenCtx(BYTE& CandidateContext, LdeErrorCodes& Status) {
-	if ((CandidateContext & 0x03) < 3) {
-		BYTE new_opcode_length = (CandidateContext & 0x03) + 1;
-		CandidateContext &= 0xFC;
-		CandidateContext |= new_opcode_length;
-	} else 
+	if ((CandidateContext & 0x03) == 3) {
 		Status = opcode_overflow;
+		return;
+	}
+	CandidateContext &= 0xFC;
+	CandidateContext |= (CandidateContext & 0x03) + 1;
 }
 
 void Lde::setCurrentInstructionLength(_In_ BYTE instruction_length, _Inout_ BYTE& CandidateContext) {
@@ -698,6 +692,7 @@ BOOLEAN Lde::isCurrentInstructionShortened(const BYTE prefix_count, const LPBYTE
 	for (BYTE i = 0; i < prefix_count; i++) 
 		if (*(reference_address - i) == 0x66) 
 			return true;
+
 	return false;
 }
 
