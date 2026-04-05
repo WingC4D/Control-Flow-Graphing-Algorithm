@@ -280,12 +280,12 @@ void FunctionTree::transferUniqueChildren(Block& OldParentBlock, Block& NewParen
 	}
 	BOOLEAN transferred_parent = false;
 	for (DWORD child_idx: OldParentBlock.flowToVec) {
-		for (BYTE parents_idx = 0; DWORD dwParentIndex: blocksVec[child_idx]->flowFromVec) {
-			if (dwParentIndex == OldParentBlock.getIndex()) {
-				blocksVec[child_idx]->flowFromVec[parents_idx] = NewParentBlock.getIndex();
+		for (BYTE parentsVec_idx = 0; DWORD parent_idx: blocksVec[child_idx]->flowFromVec) {
+			if (parent_idx == OldParentBlock.getIndex()) {
+				blocksVec[child_idx]->flowFromVec[parentsVec_idx] = NewParentBlock.getIndex();
 				break;
 			}
-			parents_idx++;
+			parentsVec_idx++;
 		}
 		transferred_parent = true;
 		NewParentBlock.flowToVec.emplace_back(child_idx);
