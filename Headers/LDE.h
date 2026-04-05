@@ -143,9 +143,9 @@ class Lde { friend FunctionTree; friend  Block;
 
 	static BYTE getValidInstructionsSizeHook(_Inout_ LPVOID& target_address, _Out_ LdeHookingState& State);
 
-	static BOOLEAN findAndFixRelocations(_Inout_ LPBYTE trampoline_gateway_address, _In_  LdeHookingState& State);
+	static BOOLEAN findAndFixRelocations(_Inout_ LPBYTE trampoline_gateway_address, const  LdeHookingState& State);
 
-	static LPBYTE resolveJump(_In_ LPBYTE address_to_resolve);
+	static LPBYTE resolveJump(LPBYTE address_to_resolve) ;
 
 	static blk::TraceResults checkForNewBlock(BYTE& InstructionContext, LPBYTE lpReference);
 
