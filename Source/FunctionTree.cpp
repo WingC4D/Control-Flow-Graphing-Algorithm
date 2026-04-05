@@ -5,7 +5,7 @@ BOOLEAN Block::isInRange(const LPBYTE candidate_address) const {
 		return false;
 	if (landmarksPtr->root > candidate_address)
 		return false;
-	if (landmarksPtr->end  < candidate_address) 
+	if (landmarksPtr->end < candidate_address) 
 		return false;
 	return true;
 }
@@ -78,7 +78,7 @@ BOOLEAN FunctionTree::splitBlock(Block& BlockToSplit, const LPBYTE splitting_add
 
 AddBlock FunctionTree::addBlock(BYTE* const address_to_add, const DWORD new_block_index, const DWORD parent_index, const DWORD height, std::map<BYTE*, Block*>& RootsMap) {
 	if (RootsMap.contains(address_to_add)) 
-		return  was_traced;
+		return was_traced;
 	auto UpperBound = RootsMap.upper_bound(address_to_add);
 	if (UpperBound != RootsMap.begin()) {
 		Block& PreviousBlock = *(--UpperBound)->second;
@@ -279,7 +279,7 @@ void FunctionTree::transferUniqueChildren(Block& OldParentBlock, Block& NewParen
 		return;
 	}
 	BOOLEAN transferred_parent = false;
-	for (DWORD  child_idx: OldParentBlock.flowToVec) {
+	for (DWORD child_idx: OldParentBlock.flowToVec) {
 		for (BYTE parents_idx = 0; DWORD dwParentIndex: blocksVec[child_idx]->flowFromVec) {
 			if (dwParentIndex == OldParentBlock.getIndex()) {
 				blocksVec[child_idx]->flowFromVec[parents_idx] = NewParentBlock.getIndex();
