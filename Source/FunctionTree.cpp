@@ -10,7 +10,7 @@ BOOLEAN Block::isInRange(const LPBYTE candidate_address) const {
 	return true;
 }
 
-BOOLEAN Block::isInstructionHead(LPBYTE candidate_address) const {
+BOOLEAN Block::isInstructionHead(const LPBYTE candidate_address) const {
 	if (!landmarksPtr->end) 
 		return false;
 	for (DWORD accumulated_length = 0; BYTE Context: ldeState->contextsArray) {
@@ -21,7 +21,7 @@ BOOLEAN Block::isInstructionHead(LPBYTE candidate_address) const {
 	return false;
 }
 
-void Block::resize(BYTE new_size, LPBYTE new_end_address) const {
+void Block::resize(const BYTE new_size, const LPBYTE new_end_address) const {
 	if (new_size && new_end_address) {
 		landmarksPtr->end		   = new_end_address;
 		ldeState->instructionCount = new_size;
@@ -30,7 +30,7 @@ void Block::resize(BYTE new_size, LPBYTE new_end_address) const {
 	}
 }
 
-void Block::findNewEnd(LPBYTE interlacing_root_ptr) const {
+void Block::findNewEnd(const LPBYTE interlacing_root_ptr) const {
 	DWORD accumulated_length = 0;
 	for (BYTE last_instruction_length = 0, new_instruction_count = 0; BYTE Context: ldeState->contextsArray) {
 		if (landmarksPtr->root + accumulated_length == interlacing_root_ptr) {
@@ -44,7 +44,7 @@ void Block::findNewEnd(LPBYTE interlacing_root_ptr) const {
 	}
 }
 
-BOOLEAN FunctionTree::splitBlock(Block& BlockToSplit, LPBYTE splitting_address, std::map<BYTE*, Block*>& RootsMap) {
+BOOLEAN FunctionTree::splitBlock(Block& BlockToSplit, const LPBYTE splitting_address, std::map<BYTE*, Block*>& RootsMap) {
 #ifdef DEBUG
 	if (!BlockToSplit.isInRange(splitting_address)) 
 		return false;
@@ -53,7 +53,7 @@ BOOLEAN FunctionTree::splitBlock(Block& BlockToSplit, LPBYTE splitting_address, 
 	      original_instructions_count  = BlockToSplit.ldeState->instructionCount,
 		 *split_block_root			   = BlockToSplit.landmarksPtr->root;
 	for (DWORD new_index = static_cast<DWORD>(blocksVec.size()), last_instruction_length = 0, accumulated_length = 0;
-		 BYTE Context : BlockToSplit.ldeState->contextsArray) {
+		 BYTE Context: BlockToSplit.ldeState->contextsArray) {
 		if (split_block_root + accumulated_length != splitting_address || !iterated_instructions_count) {
 			last_instruction_length = Lde::getInstructionLengthCtx(Context);
 			accumulated_length	   += last_instruction_length;
@@ -90,8 +90,7 @@ AddBlock FunctionTree::addBlock(BYTE* const address_to_add, const DWORD new_bloc
 	return added;
 }
 
-fTree::ErrorCode FunctionTree::trace() {
-	using enum blk::TraceResults;
+fnt::ErrorCode FunctionTree::trace() { using enum blk::TraceResults;
 	std::vector<DWORD> ExplorationVec(1);
 	std::map		   RootsMap{std::pair{root, blocksVec[0].get()}};
 	while (!ExplorationVec.empty()) {
@@ -99,7 +98,7 @@ fTree::ErrorCode FunctionTree::trace() {
 			   vector_size  =  static_cast<DWORD>(blocksVec.size());
 		Block& CurrentBlock	= *blocksVec[current_idx];
 		if (vector_size == MAX_BRANCH_INDEX) 
-			return fTree::failed;
+			return fnt::failed;
 		ExplorationVec.pop_back();
 		if (CurrentBlock.landmarksPtr->end) 
 			continue;
@@ -129,11 +128,10 @@ fTree::ErrorCode FunctionTree::trace() {
 			case reachedCall:
 			case failed:
 			case noNewBlock: 
-				return fTree::failed;
+				return fnt::failed;
 		}
  	}
-	//print();
- 	return fTree::success;
+ 	return fnt::success;
 }
 
 void Block::logIndex() const {
@@ -242,7 +240,7 @@ blk::TraceResults Block::traceUntil(_Out_ std::vector<LPBYTE>& NewFunctionsVec, 
 }
 
 BOOLEAN FunctionTree::checkIfTraced(Block& JustTracedBlock, std::map<BYTE*, Block*>& RootsMap) const {
-	std::map<LPBYTE, Block*>::iterator NextBlockIterator = RootsMap.upper_bound(JustTracedBlock.landmarksPtr->root);
+	auto NextBlockIterator = RootsMap.upper_bound(JustTracedBlock.landmarksPtr->root);
 	if (NextBlockIterator == RootsMap.end())
 		return false;
 	if (JustTracedBlock.idx == NextBlockIterator->second->idx) 

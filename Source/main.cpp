@@ -1,8 +1,14 @@
 #include "..\Headers\main.h"
 
 int main() {
-	FunctionTree FuncTree(reinterpret_cast<void*>(GetProcAddress(GetModuleHandleA("KernelBase.dll"), "CreateProcessInternalW")));
-	FuncTree.trace() == fTree::success ? FuncTree.print() : std::println("[x] Analysis Failed!");
+	HMODULE hModule;
+	LPVOID target_function;
+	if (!(hModule = GetModuleHandleA("KernelBase.dll")))
+		return 1;
+	if (!(target_function = reinterpret_cast<void*>(GetProcAddress(hModule, "CreateProcessInternalW"))))
+		return 2;
+	FunctionTree FuncTree(target_function);
+	FuncTree.trace() == fnt::success ? FuncTree.print() : std::println("[x] Analysis Failed!");
 	std::cin.get();
 	return 0;
 }

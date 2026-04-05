@@ -47,10 +47,7 @@ struct BlockLandmarks {
 	BYTE* const root;
 	BYTE *end;
 
-	BlockLandmarks(LPBYTE root_address, LPBYTE end_address = nullptr):
-	root(root_address),
-	end(end_address){
-	}
+	BlockLandmarks(LPBYTE root_address, LPBYTE end_address = nullptr): root(root_address), end(end_address){}
 	BYTE* getRoot() const {
 		return root;
 	}
@@ -64,13 +61,13 @@ struct Block {
 	std::vector<DWORD>				flowFromVec;
 	std::vector<DWORD>				flowToVec;
 
-	Block(LPBYTE root_address, DWORD parent_index, DWORD index, DWORD height_):
-	landmarksPtr(std::make_unique<BlockLandmarks>(root_address)), ldeState(std::make_unique<LdeState>()),flowFromVec(0), flowToVec(0) {
+	Block(LPBYTE root_address, DWORD parent_index, DWORD index, DWORD height_): landmarksPtr(std::make_unique<BlockLandmarks>(root_address)), ldeState(std::make_unique<LdeState>()),flowFromVec(0), flowToVec(0) {
 		idx    = index;
 		height = height_;
 		if (parent_index != 0xFFFFFFFF)
 			flowFromVec.emplace_back(parent_index);
 	}
+
 	void print() const; 
 
 	void logIndex() const;
@@ -92,7 +89,6 @@ struct Block {
 	void handleEndOfTrace(LPBYTE current_address, LdeState& State);
 
 	inline static void addResolvedCall(std::vector<LPBYTE>& NewFunctionVec, LPBYTE resolved_address);
-
 };
 
 enum AddBlock: BYTE {
@@ -114,8 +110,8 @@ struct ConditionalJumpCtx {
 	DWORD	shallowIdx,
 			deepIdx;
 };
-namespace fTree {
-	enum ErrorCode : BYTE {
+namespace fnt {
+	enum ErrorCode: BYTE {
 		success,
 		failed
 	};
@@ -131,7 +127,7 @@ struct FunctionTree {
 		blocksVec.emplace_back(std::make_unique<Block>(root, 0xFFFFFFFF, 0, 0));
 	}
 
-	fTree::ErrorCode trace();
+	fnt::ErrorCode trace();
 
 	inline BOOLEAN splitBlock(Block& BlockToSplit, LPBYTE splitting_address, std::map<BYTE*, Block*>& RootsMap);
 
