@@ -49,9 +49,9 @@ BOOLEAN FunctionTree::splitBlock(Block& BlockToSplit, const LPBYTE splitting_add
 	if (!BlockToSplit.isInRange(splitting_address)) 
 		return false;
 #endif
-	BYTE  iterated_instructions_count  = 0,
-	      original_instructions_count  = BlockToSplit.ldeState->instructionCount,
-		 *split_block_root			   = BlockToSplit.landmarksPtr->root;
+	BYTE  iterated_instructions_count = 0,
+	      original_instructions_count = BlockToSplit.ldeState->instructionCount,
+		 *split_block_root			  = BlockToSplit.landmarksPtr->root;
 	for (DWORD new_index = static_cast<DWORD>(blocksVec.size()), last_instruction_length = 0, accumulated_length = 0;
 		 BYTE Context: BlockToSplit.ldeState->contextsArray) {
 		if (split_block_root + accumulated_length != splitting_address || !iterated_instructions_count) {
