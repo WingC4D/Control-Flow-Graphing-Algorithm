@@ -136,7 +136,7 @@ fnt::ErrorCode FunctionTree::trace() { using enum blk::TraceResults;
 
 void Block::logIndex() const {
 	if (idx & COND_BLOCK_MASK) {
-		idx& C_JUMP_TAKEN_MASK ?
+		idx & C_JUMP_TAKEN_MASK ?
 			std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Taken)\n", idx & MAX_BRANCH_INDEX, height) :
 			std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Not Taken)\n", idx & MAX_BRANCH_INDEX, height);
 			return;
