@@ -135,13 +135,12 @@ fnt::ErrorCode FunctionTree::trace() { using enum blk::TraceResults;
 }
 
 void Block::logIndex() const {
-	if (idx & COND_BLOCK_MASK) {
-		idx & C_JUMP_TAKEN_MASK ?
+	if (idx & COND_BLOCK_MASK) 
+		return idx & C_JUMP_TAKEN_MASK ?
 			std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Taken)\n", idx & MAX_BRANCH_INDEX, height) :
 			std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Not Taken)\n", idx & MAX_BRANCH_INDEX, height);
-			return;
-	}
-	height ?
+
+	return height ?
 		std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Non Conditional)\n", idx & 0x00FFFFFF, height):
 		std::println("[!] Analysing Root Branch (Non Conditional)\n");
 }
@@ -151,6 +150,7 @@ void Block::addResolvedCall(std::vector<unsigned char*>& NewFunctionVec, unsigne
 	for (BYTE* stored_func_address: NewFunctionVec) 
 		if ((was_added = stored_func_address == resolved_address)) 
 			break;
+
 	if (!was_added)
 		NewFunctionVec.emplace_back(resolved_address);
 }
