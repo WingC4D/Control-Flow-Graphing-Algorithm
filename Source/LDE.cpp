@@ -275,7 +275,6 @@ BYTE Lde::analyseGroup3(const LPBYTE lpCandidate, BYTE& InstructionContext, LdeE
 	return added_opcode_length + added_immediate_length;
 }
 
-
 LPBYTE Lde::resolveJump(const LPBYTE address_to_resolve) {
 	LdeJumpResolutionState State(address_to_resolve);
 	if (!mapInstructionLength(State.toResolve, State.currInstructionContext, State.status, State.prefixCountArray[State.instructionCount]))
@@ -294,11 +293,11 @@ LPBYTE Lde::resolveJump(const LPBYTE address_to_resolve) {
 		case conditional | jump | _short: 
 			switch (disposition_size) {
 				case SIZE_OF_BYTE: 
-					result = &address_to_resolve[*static_cast<signed char *>(disposition_address) + instruction_length];
+					result = address_to_resolve + *static_cast<signed char *>(disposition_address) + instruction_length;
 					break;
 				
 				case SIZE_OF_DWORD: 
-					result = &address_to_resolve[*static_cast<int *>(disposition_address) + instruction_length];
+					result = address_to_resolve + *static_cast<int *>(disposition_address) + instruction_length;
 					break;
 				
 				default: 
@@ -312,11 +311,11 @@ LPBYTE Lde::resolveJump(const LPBYTE address_to_resolve) {
 		case indirect_far_call: 
 			switch (disposition_size) {
 				case SIZE_OF_BYTE: 
-					result = *reinterpret_cast<LPVOID*>(&address_to_resolve[*static_cast<signed char *>(disposition_address) + instruction_length]);
+					result = *reinterpret_cast<LPVOID*>(address_to_resolve + *static_cast<signed char *>(disposition_address) + instruction_length);
 					break;
 				
 				case SIZE_OF_DWORD: 
-					result = *reinterpret_cast<LPVOID*>(&address_to_resolve[*static_cast<int *>(disposition_address) + instruction_length]);
+					result = *reinterpret_cast<LPVOID*>(address_to_resolve + *static_cast<int *>(disposition_address) + instruction_length);
 					break;
 				
 				default: 
@@ -411,11 +410,11 @@ LPBYTE Lde::analyseRedirectingInstruction(const DWORD accumulated_length, _Inout
 		case ret | _far   | _short :
 		case ret | _near  | _short | _far: 
 			State.status = reached_end_of_function;
-			return reference_address;
+			return reference_address - instruction_length;
 		
 		case jump:
 		case call:
-			return reference_address + instruction_length + (isCurrentInstructionShortened(State.getCurrentPrefixCount(), reference_address) ? *static_cast<PINT16>(disposition_ptr) : *static_cast<PINT32>(disposition_ptr));
+			return reference_address + *static_cast<int *>(disposition_ptr);
 
 		case indirect_call:
 		case indirect_far_call:
@@ -426,25 +425,25 @@ LPBYTE Lde::analyseRedirectingInstruction(const DWORD accumulated_length, _Inout
 #ifdef DEBUG
 					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE*>(&reference_address[*static_cast<signed char*>(disposition_ptr)]);
+					return *reinterpret_cast<LPBYTE*>(reference_address + *static_cast<signed char*>(disposition_ptr));
 
 				case SIZE_OF_WORD:
 #ifdef DEBUG
 					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE*>(&reference_address[*static_cast<short*>(disposition_ptr)]);
+					return *reinterpret_cast<LPBYTE*>(reference_address + *static_cast<short*>(disposition_ptr));
 
 				case SIZE_OF_DWORD:
 #ifdef DEBUG
 					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE*>(&reference_address[*static_cast<long*>(disposition_ptr)]);
+					return *reinterpret_cast<LPBYTE*>(reference_address + *static_cast<long*>(disposition_ptr));
 
 				case SIZE_OF_QWORD: 
 #ifdef DEBUG
 					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG>(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE *>(&reference_address[*static_cast<long long*>(disposition_ptr)]);
+					return *reinterpret_cast<LPBYTE *>(reference_address + *static_cast<long long*>(disposition_ptr));
 				
 				default: 
 					State.status = wrong_input;
@@ -577,14 +576,17 @@ void Lde::incrementOpcodeLenCtx(BYTE& CandidateContext, LdeErrorCodes& Status) {
 		return;
 	}
 	BYTE new_opcode_length = (CandidateContext & 0x03) + 1;
-	CandidateContext &= 0xFC;
-	CandidateContext |= new_opcode_length;
+	CandidateContext	  &= 0xFC;
+	CandidateContext	  |= new_opcode_length;
 }
 
 void Lde::setCurrentInstructionLength(_In_ BYTE instruction_length, _Inout_ BYTE& CandidateContext) {
-	instruction_length > MAX_INSTRUCTION_SIZE ?
-		std::println("[!] Error @ Lde::setCurrentInstructionLength, Value is greater than 0x0F!\n[i] Received instruction length: {:#X}", static_cast<int>(instruction_length)):
-		[&CandidateContext, instruction_length] { CandidateContext &= 0xC3; CandidateContext |= instruction_length << 2; }();
+	if (instruction_length > MAX_INSTRUCTION_SIZE) {
+		std::println("[!] Error @ Lde::setCurrentInstructionLength, Value is greater than 0x0F!\n[i] Received instruction length: {:#X}", static_cast<int>(instruction_length));
+		return;
+	}
+	CandidateContext &= 0xC3;
+	CandidateContext |= instruction_length << 2;
 }
 
 BOOLEAN Lde::analyseSibBase(_In_ const BYTE candidate) {
