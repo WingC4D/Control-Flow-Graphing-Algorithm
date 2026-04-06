@@ -294,11 +294,11 @@ LPBYTE Lde::resolveJump(const LPBYTE address_to_resolve) {
 		case conditional | jump | _short: 
 			switch (disposition_size) {
 				case SIZE_OF_BYTE: 
-					result = &address_to_resolve[*static_cast<signed char *>(disposition_address)] + instruction_length;
+					result = &address_to_resolve[*static_cast<signed char *>(disposition_address) + instruction_length];
 					break;
 				
 				case SIZE_OF_DWORD: 
-					result = &address_to_resolve[*static_cast<int *>(disposition_address)] + instruction_length;
+					result = &address_to_resolve[*static_cast<int *>(disposition_address) + instruction_length];
 					break;
 				
 				default: 
@@ -312,11 +312,11 @@ LPBYTE Lde::resolveJump(const LPBYTE address_to_resolve) {
 		case indirect_far_call: 
 			switch (disposition_size) {
 				case SIZE_OF_BYTE: 
-					result = *reinterpret_cast<LPVOID*>(&address_to_resolve[*static_cast<signed char *>(disposition_address)] + instruction_length);
+					result = *reinterpret_cast<LPVOID*>(&address_to_resolve[*static_cast<signed char *>(disposition_address) + instruction_length]);
 					break;
 				
 				case SIZE_OF_DWORD: 
-					result = *reinterpret_cast<LPVOID*>(&address_to_resolve[*static_cast<int *>(disposition_address)] + instruction_length);
+					result = *reinterpret_cast<LPVOID*>(&address_to_resolve[*static_cast<int *>(disposition_address) + instruction_length]);
 					break;
 				
 				default: 
@@ -399,7 +399,7 @@ LPBYTE Lde::analyseRedirectingInstruction(const DWORD accumulated_length, _Inout
 		   instruction_length = getIndexInstructionLength(last_valid_index, State),
 		   opcode_length	  = get_index_opcode_len(last_valid_index, State),
 		   prefix_count		  = State.prefixCountArray[last_valid_index],
-		  *reference_address  = static_cast<BYTE*>(State.functionAddress) + accumulated_length - instruction_length;
+		  *reference_address  = static_cast<BYTE*>(State.functionAddress) + accumulated_length;
 	LPVOID disposition_ptr	  = reference_address + opcode_length + prefix_count;
 	switch (analyseOpcodeType(reference_address, State.currInstructionContext)) {
 		case ret:
@@ -426,25 +426,25 @@ LPBYTE Lde::analyseRedirectingInstruction(const DWORD accumulated_length, _Inout
 #ifdef DEBUG
 					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE*>(&reference_address[static_cast<signed char>(instruction_length) + *static_cast<signed char*>(disposition_ptr)]);
+					return *reinterpret_cast<LPBYTE*>(&reference_address[*static_cast<signed char*>(disposition_ptr)]);
 
 				case SIZE_OF_WORD:
 #ifdef DEBUG
 					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE*>(&reference_address[static_cast<SHORT>(instruction_length) + *static_cast<short*>(disposition_ptr)]);
+					return *reinterpret_cast<LPBYTE*>(&reference_address[*static_cast<short*>(disposition_ptr)]);
 
 				case SIZE_OF_DWORD:
 #ifdef DEBUG
 					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE*>(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
+					return *reinterpret_cast<LPBYTE*>(&reference_address[*static_cast<long*>(disposition_ptr)]);
 
 				case SIZE_OF_QWORD: 
 #ifdef DEBUG
 					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG>(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE *>(&reference_address[instruction_length + *static_cast<long long*>(disposition_ptr)]);
+					return *reinterpret_cast<LPBYTE *>(&reference_address[*static_cast<long long*>(disposition_ptr)]);
 				
 				default: 
 					State.status = wrong_input;
