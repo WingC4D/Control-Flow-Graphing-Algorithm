@@ -1,6 +1,6 @@
 #include "Lde.h"
 
-[[nodiscard]] BYTE Lde::mapInstructionLength(const LPVOID analysis_address, inst::Context& InstructionContext, LdeErrorCodes& status) { //Main instruction decoding dispatcher
+BYTE Lde::mapInstructionLength(const LPVOID analysis_address, inst::Context& InstructionContext, LdeErrorCodes& status) { //Main instruction decoding dispatcher
 	if (!analysis_address) {
 		status = no_input;
 		return 0;
@@ -445,10 +445,10 @@ LPBYTE Lde::analyseRedirectingInstruction(const DWORD accumulated_length, _Inout
 		case jump:
 		case call: {
 			State.contextsArray[last_valid_index].setRipRelative();
-			return reference_address + *static_cast<int*>(disposition_ptr);
+			return reference_address + *static_cast<int*>(disposition_ptr) + State.contextsArray[last_valid_index].getLength();
 		}
 		case indirect_call:
-		case indirect_far_call:
+		case indirect_far_call: 
 		case indirect_jump:
 		case indirect_far_jump: {
 			switch (State.contextsArray[last_valid_index].getLength() - State.contextsArray[last_valid_index].getPreDisposition()) {
@@ -456,25 +456,25 @@ LPBYTE Lde::analyseRedirectingInstruction(const DWORD accumulated_length, _Inout
 #ifdef DEBUG
 					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE*>(reference_address + *static_cast<signed char*>(disposition_ptr));
+					return *reinterpret_cast<LPBYTE*>(reference_address + *static_cast<signed char*>(disposition_ptr) + State.contextsArray[last_valid_index].getLength());
 
 				case SIZE_OF_WORD:
 #ifdef DEBUG
 					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE*>(reference_address + *static_cast<short*>(disposition_ptr));
+					return *reinterpret_cast<LPBYTE*>(reference_address + *static_cast<short*>(disposition_ptr) + State.contextsArray[last_valid_index].getLength());
 
 				case SIZE_OF_DWORD:
 #ifdef DEBUG
 					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE*>(reference_address + *static_cast<long*>(disposition_ptr));
+					return *reinterpret_cast<LPBYTE*>(reference_address + *static_cast<long*>(disposition_ptr) + State.contextsArray[last_valid_index].getLength());
 
 				case SIZE_OF_QWORD: 
 #ifdef DEBUG
 					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG>(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE *>(reference_address + *static_cast<long long*>(disposition_ptr));
+					return *reinterpret_cast<LPBYTE *>(reference_address + *static_cast<long long*>(disposition_ptr) + State.contextsArray[last_valid_index].getLength());
 				
 				default: 
 					State.status = wrong_input;
