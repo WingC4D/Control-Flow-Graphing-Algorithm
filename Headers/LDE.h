@@ -16,7 +16,6 @@
 		constexpr DWORD TWO_GIGABYTES = 0x80000000;
 		#define hUINT
 		#define TRAMPOLINE_SIZE 0x0D
-		#define MAX_INSTRUCTION_SIZE 0x0F
 	#endif
 #endif
 
@@ -24,27 +23,94 @@
 struct FunctionTree;
 struct Block;
 interface LdeCommon;
-constexpr BYTE SIZE_OF_BYTE					 = 0x01,
-               SIZE_OF_WORD					 = 0x02,
-               SIZE_OF_DWORD				 = 0x04,
-			   RELATIVE_TRAMPOLINE_SIZE		 = 0x05,
-               SIZE_OF_QWORD				 = 0x08,
-			   MAX_PREFIX_COUNT				 = 0x0E,
-               SIZE_OF_OWORD				 = 0x10,
-               REX_MASK						 = 0x40,
-               RIP_RELATIVE_MASK			 = 0x80,
-               MOD_MASK						 = 0xC0,
-               REG_MASK						 = 0x38,
-               RM_MASK						 = 0x07,
-               IMM16_MASK					 = 0x10,
-               IMM32_MASK					 = 0x20,
-               CALLS_MASK					 = 0x40,
-               CONDITIONALS_MASK			 = 0x80,
-               DISPOSITIONS_MASK			 = 0x30,
-               BLOCK_MAX_INSTRUCTIONS = 0xA0;
+constexpr BYTE SIZE_OF_BYTE				= 0x01,
+               SIZE_OF_WORD				= 0x02,
+               SIZE_OF_DWORD			= 0x04,
+			   RELATIVE_TRAMPOLINE_SIZE	= 0x05,
+               SIZE_OF_QWORD			= 0x08,
+			   MAX_PREFIX_COUNT			= 0x0E,
+               SIZE_OF_OWORD			= 0x10,
+			   MAX_INSTRUCTION_SIZE		= 0x0F,
+			   REX_MASK					= 0x40,
+               RIP_RELATIVE_MASK		= 0x80,
+               MOD_MASK					= 0xC0,
+               REG_MASK					= 0x38,
+               RM_MASK					= 0x07,
+               IMM16_MASK				= 0x10,
+               IMM32_MASK				= 0x20,
+               CALLS_MASK				= 0x40,
+               CONDITIONALS_MASK		= 0x80,
+               DISPOSITIONS_MASK		= 0x30,
+               BLOCK_MAX_INSTRUCTIONS	= 0xA0;
 
 
+namespace inst {
 
+	class Context {
+		uint16_t opcodeLength : 2 = 0;
+		uint16_t length		  : 4 = 0;
+		uint16_t rexW		  : 1 = 0;
+		uint16_t ripRelative  : 1 = 0;
+		uint16_t pfxCount	  : 4 = 0;
+		protected:
+			uint16_t reserved : 4 = 0;
+	public:
+		BOOLEAN isRexW () const  {
+			return rexW;
+		}
+
+		BOOLEAN isRipRelative() const {
+			return ripRelative;
+		}
+
+		BYTE getLength() const { 
+			return length;
+		}
+
+		BYTE getPrefixCount() const {
+			return pfxCount;
+		}
+
+		BYTE getOpcodeLength() const {
+			return opcodeLength + 1;
+		}
+
+		BYTE getDisposition() const {
+			return length - pfxCount - getOpcodeLength();
+		}
+
+		BYTE getPreDisposition() const {
+			return pfxCount + getOpcodeLength();
+		}
+
+		BOOLEAN setLength(BYTE new_length) {
+			return new_length <= MAX_INSTRUCTION_SIZE ?
+				[&]->BOOLEAN { length = new_length; return true; }() : false;
+		}
+
+		BOOLEAN incrementPrefixCount() {
+			return pfxCount < MAX_PREFIX_COUNT ? [&]->BOOLEAN { pfxCount++; return true; }() : false;
+		}
+
+		BOOLEAN incrementOpcode() {
+			return opcodeLength != 3 ?
+				[&]->BOOLEAN { opcodeLength++; return true; }() : false;
+		}
+
+		BOOLEAN setPrefixCount(BYTE new_count)  {
+			return new_count < MAX_PREFIX_COUNT ?
+				[this, &new_count]->BOOLEAN { pfxCount = new_count;  return true; }() : false;
+		}
+
+		void setRipRelative() {
+			ripRelative = true;
+		}
+
+		void setRexW() {
+			rexW = true;
+		}
+	};
+}
 enum Register: BYTE {
 	ax, bx, cx, dx,sp, bp, si, di
 };
@@ -68,68 +134,71 @@ namespace opcodes {
 }
 
 struct LdeCommon {
-	LdeErrorCodes status				 = success;
-	BYTE		  currInstructionContext = 0,
-				  instructionCount		 = 0;
+	LdeErrorCodes status		   = success;
+	inst::Context currContext	   = { };
+	BYTE		  instructionCount = 0;
 };
 
 struct LdeHookingState: LdeCommon {
-	LPVOID functionAddress;
-	BYTE   ripIndexesCount = 0,
-		   contextsArray[RELATIVE_TRAMPOLINE_SIZE]{},
-		   prefixCountArray[RELATIVE_TRAMPOLINE_SIZE]{},
-		   ripRelativeIndexesArray[RELATIVE_TRAMPOLINE_SIZE]{};
+	LPVOID		  functionAddress;
+	BYTE		  ripIndexesCount = 0,
+				  ripRelativeIndexesArray[RELATIVE_TRAMPOLINE_SIZE]{};
+	inst::Context contextsArray[RELATIVE_TRAMPOLINE_SIZE]{};
 	LdeHookingState(LPVOID target_address): functionAddress(target_address) {}
 	BYTE getCurrentPrefixCount()const {
-		return static_cast<unsigned char>(prefixCountArray[instructionCount] & 0x0F);
+		return currContext.getPrefixCount();
 	}
 
 	void prepareForNextStep() {
-		contextsArray[instructionCount] = currInstructionContext;
-		currInstructionContext = 0;
+		contextsArray[instructionCount] = currContext;
+		currContext						= inst::Context{};
 		instructionCount++;
+	}
+	void reset() {
+		for (BYTE i = 0; i < instructionCount; i++) 
+			contextsArray[i] = inst::Context{};
+		for (BYTE i = 0; i < ripIndexesCount; i++)
+			ripRelativeIndexesArray[i] = 0;
+		currContext      = inst::Context{};
+		ripIndexesCount  = 0;
+		instructionCount = 0;
 	}
 };
 
 struct LdeState: LdeCommon {
 	BYTE			  newBlocksCount;
-	std::vector<BYTE> contextsArray,
-					  prefixCountArray;
+	std::vector<inst::Context> contextsArray;
 	LdeState():
-	contextsArray(BLOCK_MAX_INSTRUCTIONS),
-	prefixCountArray(BLOCK_MAX_INSTRUCTIONS) {
-		status				   = success;
-		currInstructionContext = 0;
-		instructionCount	   = 0;
-		newBlocksCount		   = 0;
+	contextsArray(BLOCK_MAX_INSTRUCTIONS) {
+		status			= success;
+		instructionCount = 0;
+		newBlocksCount	 = 0;
 	}
 	BYTE getCurrentPrefixCount() const {
-		return static_cast<unsigned char>(prefixCountArray[instructionCount] & 0x0F);
+		return currContext.getPrefixCount();
+
 	}
 	void prepareForNextStep() {
-		contextsArray[instructionCount] = currInstructionContext;
-		currInstructionContext			= 0;
+		contextsArray[instructionCount] = currContext;
+		currContext					    = inst::Context{};
 		instructionCount++;
 	}
 };
 
 struct LdeJumpResolutionState: LdeCommon {
 	LPVOID toResolve;
-	BYTE   ripIndexesCount = 0,
-		   contextsArray[1]{},
-		   prefixCountArray[1]{},
-		   ripRelativeIndexesArray[1]{};
+	inst::Context contextsArray[1]{};
 
 	LdeJumpResolutionState(LPVOID lpTarget): toResolve(lpTarget) {}
 
 	BYTE getCurrentPrefixCount() const {
-		return static_cast<unsigned char>(prefixCountArray[0] & 0x0F);
+		return currContext.getPrefixCount();
 	}
 
 	void prepareForNextStep() {
-		contextsArray[0]	   = currInstructionContext;
-		currInstructionContext = 0;
-		instructionCount	   = 1;
+		contextsArray[0] = currContext;
+		currContext		 = inst::Context{};
+		instructionCount = 1;
 	}
 };
 
@@ -138,22 +207,19 @@ enum state: BYTE {
 	reached_nt_dll,
 	branch_is_obfuscated
 };
+
 namespace blk { enum TraceResults : BYTE; }
 class Lde { friend FunctionTree; friend  Block;
 
 	static BYTE getValidInstructionsSizeHook(_Inout_ LPVOID& target_address, _Out_ LdeHookingState& State);
 
-	static BOOLEAN findAndFixRelocations(_Inout_ LPBYTE trampoline_gateway_address, const  LdeHookingState& State);
+	static BOOLEAN findAndFixRelocations(_Inout_ LPBYTE trampoline_gateway_address, const LdeHookingState& State);
 
 	static LPBYTE resolveJump(LPBYTE address_to_resolve) ;
 
-	static blk::TraceResults checkForNewBlock(BYTE& InstructionContext, LPBYTE lpReference);
+	static blk::TraceResults checkForNewBlock(inst::Context& InstructionContext, LPBYTE lpReference);
 
-	static BYTE getInstructionLengthCtx(_In_ BYTE CandidateContext) {
-		return static_cast<BYTE>(CandidateContext & 0x3C) >> 2;
-	}
-
-	[[nodiscard]] static BYTE mapInstructionLength(_In_ LPVOID analysis_address, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status, _Inout_ BYTE& prefix_count);
+	[[nodiscard]] static BYTE mapInstructionLength(_In_ LPVOID analysis_address, _Inout_ inst::Context& InstructionContext, _Inout_ LdeErrorCodes& status);
 
 	enum first_byte_traits: BYTE {
 		none		    = 0x00,
@@ -167,21 +233,9 @@ class Lde { friend FunctionTree; friend  Block;
 		imm_eight_bytes = 0x80
 	};
 
-	static void logInstructionAndAddressCtx(_In_ LPBYTE reference_address, _In_ BYTE CandidateContext, BYTE instruction_index);
-
-	inline static void incrementOpcodeLenCtx(_Inout_ BYTE& CandidateContext, _Inout_ LdeErrorCodes& Status);
-
-	inline static void setCurrentInstructionLength(_In_ BYTE instruction_length, _Inout_ BYTE& CandidateContext);
+	static void logInstructionAndAddressCtx(_In_ LPBYTE reference_address, _In_ inst::Context CandidateContext, BYTE instruction_index);
 
 	inline static void resetHookingContexts(_Inout_ LdeHookingState& State);
-
-	inline static void setRex_wCtx(_Inout_ BYTE& InstructionContext);
-
-	inline static void setContextRipRel(_Inout_ BYTE& CandidateContext);
-
-	inline static void incrementInstructionLen(_Inout_ BYTE& CandidateContext, _Inout_ LdeErrorCodes& Status);
-
-	inline static BYTE getOpcodeLenCtx(_In_ BYTE CandidateContext);
 
 	static BOOLEAN traceIntoIAT(LdeHookingState& State);
 
@@ -189,26 +243,18 @@ class Lde { friend FunctionTree; friend  Block;
 
 	inline static BOOLEAN analyseSibBase(_In_ BYTE candidate);
 
-	inline static BOOLEAN isRexCtx(_In_ BYTE CandidateContext);
-
-	inline static BOOLEAN isRipRelativeCtx(_In_ BYTE CandidateContext);
-
-	static BYTE getIndexInstructionLength(_In_ BYTE index, _Inout_ const LdeHookingState& State);
-
-	static BYTE get_index_opcode_len(_In_ BYTE index, _In_ const LdeHookingState& State);
-	
-	static void logInstructionAndAddress(_In_ LPBYTE reference_address, _In_ BYTE InstructionContext);
+	static void logInstructionAndAddress(_In_ LPBYTE reference_address, _In_ inst::Context InstructionContext);
 
 	template<typename STATE>
 	static void log_2(_In_ BYTE instruction_count, _In_ STATE& State);
 
 	static void log_1(_In_ const LPBYTE reference_address, _In_ const LdeHookingState& State);
 
-	static BYTE analyseSpecialGroup(_In_ LPBYTE candidate_address, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
+	static BYTE analyseSpecialGroup(_In_ LPBYTE candidate_address, _Inout_ inst::Context& InstructionContext, _Inout_ LdeErrorCodes& status);
 
-	static BYTE analyseModRm(_In_ LPBYTE preceding_byte_ptr, _Inout_ BYTE& InstructionContext, _Inout_ LdeErrorCodes& status);
+	static BYTE analyseModRm(_In_ LPBYTE preceding_byte_ptr, _Inout_ inst::Context& InstructionContext, _Inout_ LdeErrorCodes& status);
 
-	static BYTE analyseGroup3(_In_ const LPBYTE lpCandidate, _Inout_ BYTE& InstructionContext, _Out_ LdeErrorCodes& status, _In_ BYTE prefix_count);
+	static BYTE analyseGroup3(_In_ const LPBYTE lpCandidate, _Inout_ inst::Context& InstructionContext, _Out_ LdeErrorCodes& status);
 
 	static BYTE analyseRegSizeF7(_In_ LPBYTE candidate_address, _Inout_ LdeErrorCodes& status, _In_ BYTE prefix_count) {
 		if (!candidate_address) {
@@ -218,8 +264,8 @@ class Lde { friend FunctionTree; friend  Block;
 		status = success;
 		return isCurrentInstructionShortened(prefix_count, candidate_address) ? SIZE_OF_WORD : SIZE_OF_DWORD;
 	}
-	
-	static WORD analyseOpcodeType(_In_ LPBYTE candidate_addr, _Inout_ BYTE& InstructionContext);
+
+	static WORD analyseOpcodeType(_In_ LPBYTE candidate_addr, _Inout_ inst::Context& InstructionContext);
 
 	static LPBYTE analyseRedirectingInstruction(_In_ DWORD accumulated_length, _Inout_ LdeHookingState& State);
 

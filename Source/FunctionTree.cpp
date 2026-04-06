@@ -13,10 +13,10 @@ BOOLEAN Block::isInRange(const LPBYTE candidate_address) const {
 BOOLEAN Block::isInstructionHead(const LPBYTE candidate_address) const {
 	if (!landmarksPtr->end) 
 		return false;
-	for (DWORD accumulated_length = 0; BYTE Context: ldeState->contextsArray) {
+	for (DWORD accumulated_length = 0; auto& Context: ldeState->contextsArray) {
 		if (landmarksPtr->root + accumulated_length == candidate_address) 
 			return true;
-		accumulated_length += Lde::getInstructionLengthCtx(Context);
+		accumulated_length += Context.getLength();
 	}
 	return false;
 }
@@ -27,18 +27,17 @@ void Block::resize(const BYTE new_size, const LPBYTE new_end_address) const {
 	landmarksPtr->end		   = new_end_address;
 	ldeState->instructionCount = new_size;
 	ldeState->contextsArray.resize(new_size);
-	ldeState->prefixCountArray.resize(new_size);
 }
 
 void Block::findNewEnd(const LPBYTE interlacing_root_ptr) const {
 	DWORD accumulated_length = 0;
-	for (BYTE last_instruction_length = 0, new_instruction_count = 0; BYTE Context: ldeState->contextsArray) {
+	for (BYTE last_instruction_length = 0, new_instruction_count = 0; auto& Context: ldeState->contextsArray) {
 		if (landmarksPtr->root + accumulated_length == interlacing_root_ptr) {
 			if (new_instruction_count) 
 				resize(new_instruction_count, interlacing_root_ptr - last_instruction_length);
 			return;
 		}
-		last_instruction_length = Lde::getInstructionLengthCtx(Context);
+		last_instruction_length = Context.getLength();
 		accumulated_length	   += last_instruction_length;
 		new_instruction_count++;
 	}
@@ -54,9 +53,9 @@ BOOLEAN FunctionTree::splitBlock(Block& BlockToSplit, const LPBYTE splitting_add
 	BYTE  iterated_instructions_count = 0,
 	      original_instructions_count = BlockToSplit.ldeState->instructionCount;
 	for (DWORD new_index = static_cast<DWORD>(blocksVec.size()), last_instruction_length = 0, accumulated_length = 0; 
-		 BYTE  Context: BlockToSplit.ldeState->contextsArray) {
+		 inst::Context  Context: BlockToSplit.ldeState->contextsArray) {
 		if (BlockToSplit.landmarksPtr->root + accumulated_length != splitting_address || !iterated_instructions_count) {
-			last_instruction_length = Lde::getInstructionLengthCtx(Context);
+			last_instruction_length = Context.getLength();
 			accumulated_length	   += last_instruction_length;
 			iterated_instructions_count++;
 			continue;
@@ -64,10 +63,9 @@ BOOLEAN FunctionTree::splitBlock(Block& BlockToSplit, const LPBYTE splitting_add
 		blocksVec.emplace_back(std::make_unique<Block>(splitting_address, BlockToSplit.getIndex(), new_index, BlockToSplit.height + 1));
 		Block& NewBlock				  = *blocksVec[new_index];
 		BYTE   new_instructions_count = 0;
-		for (; iterated_instructions_count + new_instructions_count < original_instructions_count; new_instructions_count++) {
+		for (; iterated_instructions_count + new_instructions_count < original_instructions_count; new_instructions_count++) 
 			NewBlock.ldeState->contextsArray[new_instructions_count]	= BlockToSplit.ldeState->contextsArray[new_instructions_count + iterated_instructions_count];
-			NewBlock.ldeState->prefixCountArray[new_instructions_count] = BlockToSplit.ldeState->prefixCountArray[new_instructions_count + iterated_instructions_count];
-		}
+		
 		NewBlock.resize(new_instructions_count, BlockToSplit.landmarksPtr->end);
 		transferUniqueChildren(BlockToSplit, NewBlock);
 		BlockToSplit.resize(iterated_instructions_count, splitting_address - last_instruction_length);
@@ -113,7 +111,7 @@ fnt::ErrorCode FunctionTree::trace() { using enum blk::TraceResults;
 			
 			case reachedConditionalJump: {
 				LPBYTE resolved_jump		  = Lde::resolveJump(CurrentBlock.landmarksPtr->end),
-					   next_instruction		  = CurrentBlock.landmarksPtr->end + Lde::getInstructionLengthCtx(*--CurrentBlock.ldeState->contextsArray.end());
+					   next_instruction		  = CurrentBlock.landmarksPtr->end + (--CurrentBlock.ldeState->contextsArray.end())->getLength();
 				auto   ConditionalJumpContext = next_instruction < resolved_jump ?
 					ConditionalJumpCtx{ .shallowPtr = next_instruction, .deepPtr = resolved_jump, .shallowIdx = vector_size | COND_BLOCK_MASK, .deepIdx = vector_size + 1 | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK }:
 					ConditionalJumpCtx{ .shallowPtr = resolved_jump, .deepPtr = next_instruction, .shallowIdx = vector_size | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK, .deepIdx = vector_size + 1 | COND_BLOCK_MASK };
@@ -157,7 +155,6 @@ void Block::addResolvedCall(std::vector<unsigned char*>& NewFunctionVec, unsigne
 
 void Block::handleEndOfTrace(LPBYTE current_address, LdeState& State) {
 	State.contextsArray.resize(State.instructionCount);
-	State.prefixCountArray.resize(State.instructionCount);
 	ldeState		  = std::make_unique<LdeState>(State);
 	landmarksPtr->end = current_address;
 }
@@ -166,11 +163,11 @@ blk::TraceResults Block::trace(_Out_ std::vector<BYTE*>& NewFunctionsVec) { usin
 	LPBYTE	 tracing_address = landmarksPtr->root;
 	LdeState State;
 	while (State.instructionCount < BLOCK_MAX_INSTRUCTIONS && State.status == success) {
-		BYTE instruction_length = Lde::mapInstructionLength(tracing_address, State.currInstructionContext, State.status, State.prefixCountArray[State.instructionCount]);
+		BYTE instruction_length = Lde::mapInstructionLength(tracing_address, State.currContext, State.status);
 		if (!instruction_length) 
 			return failed;
 		State.prepareForNextStep();
-		switch (Lde::checkForNewBlock(State.currInstructionContext, tracing_address)) {
+		switch (Lde::checkForNewBlock(State.currContext, tracing_address)) {
 			case reachedJump: 
 				handleEndOfTrace(tracing_address, State);
 				return reachedJump;
@@ -209,9 +206,9 @@ blk::TraceResults Block::traceUntil(_Out_ std::vector<LPBYTE>& NewFunctionsVec, 
 			handleEndOfTrace(reference_ptr, State);
 			return noNewBlock;
 		}
-		BYTE instruction_length = Lde::mapInstructionLength(reference_ptr, State.currInstructionContext, State.status, State.prefixCountArray[State.instructionCount]);
+		BYTE instruction_length = Lde::mapInstructionLength(reference_ptr, State.currContext, State.status);
 		State.prepareForNextStep();
-		switch (Lde::checkForNewBlock(State.currInstructionContext, reference_ptr)) {
+		switch (Lde::checkForNewBlock(State.currContext, reference_ptr)) {
 			case reachedJump: 
 				handleEndOfTrace(reference_ptr, State);
 				return reachedJump;
@@ -256,9 +253,9 @@ void Block::print() const {
 		std::println("[!] This Branch Is Not Traced Yet.");
 		return;
 	}
-	for (DWORD accumulated_length = 0, instruction_count = 0; BYTE Context: ldeState->contextsArray) {
+	for (DWORD accumulated_length = 0, instruction_count = 0; inst::Context Context: ldeState->contextsArray) {
 		Lde::logInstructionAndAddressCtx(landmarksPtr->root + accumulated_length, Context, static_cast<BYTE>(instruction_count));
-		accumulated_length += Lde::getInstructionLengthCtx(Context);
+		accumulated_length += Context.getLength();
 		if (instruction_count >= BLOCK_MAX_INSTRUCTIONS) {
 			std::println("Hit an error while printing Block #{:03d}", idx);
 			return;
