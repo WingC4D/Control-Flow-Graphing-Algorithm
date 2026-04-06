@@ -111,7 +111,6 @@ BYTE Lde::analyseModRm(const LPBYTE preceding_byte_ptr, BYTE& InstructionContext
 		status = no_input;
 		return 0;
 	}
-	incrementOpcodeLenCtx(InstructionContext, status);
 	BYTE rm_bits			 = preceding_byte_ptr[1] & RM_MASK,
 	     mod_bits			 = preceding_byte_ptr[1] & MOD_MASK,
 		 added_opcode_length = 0;
@@ -161,7 +160,6 @@ BYTE Lde::analyseSpecialGroup(LPBYTE candidate_address, BYTE& InstructionContext
 		status = no_input;
 		return 0;
 	}
-	incrementOpcodeLenCtx(InstructionContext, status);
 	candidate_address++;
 	status = success;
 	switch (*candidate_address) {
