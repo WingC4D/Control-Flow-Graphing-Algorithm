@@ -294,11 +294,11 @@ LPBYTE Lde::resolveJump(const LPBYTE address_to_resolve) {
 		case conditional | jump | _short: 
 			switch (disposition_size) {
 				case SIZE_OF_BYTE: 
-					result = address_to_resolve + *static_cast<CHAR*>(disposition_address) + instruction_length;
+					result = &address_to_resolve[*static_cast<signed char *>(disposition_address)] + instruction_length;
 					break;
 				
 				case SIZE_OF_DWORD: 
-					result = address_to_resolve + *static_cast<INT*>(disposition_address) + instruction_length;
+					result = &address_to_resolve[*static_cast<int *>(disposition_address)] + instruction_length;
 					break;
 				
 				default: 
@@ -312,11 +312,11 @@ LPBYTE Lde::resolveJump(const LPBYTE address_to_resolve) {
 		case indirect_far_call: 
 			switch (disposition_size) {
 				case SIZE_OF_BYTE: 
-					result = *reinterpret_cast<LPVOID*>(address_to_resolve + *static_cast<CHAR*>(disposition_address) + instruction_length);
+					result = *reinterpret_cast<LPVOID*>(&address_to_resolve[*static_cast<signed char *>(disposition_address)] + instruction_length);
 					break;
 				
 				case SIZE_OF_DWORD: 
-					result = *reinterpret_cast<LPVOID*>(address_to_resolve + *static_cast<INT*>(disposition_address) + instruction_length);
+					result = *reinterpret_cast<LPVOID*>(&address_to_resolve[*static_cast<int *>(disposition_address)] + instruction_length);
 					break;
 				
 				default: 
@@ -422,34 +422,30 @@ LPBYTE Lde::analyseRedirectingInstruction(const DWORD accumulated_length, _Inout
 		case indirect_jump:
 		case indirect_far_jump: {
 			switch (instruction_length - opcode_length) {
-				case SIZE_OF_BYTE: {
-					CHAR rva = static_cast<signed char>(instruction_length) + *static_cast<signed char*>(disposition_ptr);
+				case SIZE_OF_BYTE: 
 #ifdef DEBUG
-					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG>(reference_address + rva));
+					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE *>(reference_address + rva);
-				}
-				case SIZE_OF_WORD: {
-					SHORT rva = static_cast<SHORT>(instruction_length) + *static_cast<short*>(disposition_ptr);
+					return *reinterpret_cast<LPBYTE*>(&reference_address[static_cast<signed char>(instruction_length) + *static_cast<signed char*>(disposition_ptr)]);
+
+				case SIZE_OF_WORD:
 #ifdef DEBUG
-					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG>(reference_address + rva));
+					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE *>(reference_address + rva);
-				}
-				case SIZE_OF_DWORD: {
-					long rva = instruction_length + *static_cast<long*>(disposition_ptr);
+					return *reinterpret_cast<LPBYTE*>(&reference_address[static_cast<SHORT>(instruction_length) + *static_cast<short*>(disposition_ptr)]);
+
+				case SIZE_OF_DWORD:
 #ifdef DEBUG
-					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG>(reference_address + rva));
+					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE *>(reference_address + rva);
-				}
-				case SIZE_OF_QWORD: {
-					long long rva = instruction_length + *static_cast<long long*>(disposition_ptr);
+					return *reinterpret_cast<LPBYTE*>(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
+
+				case SIZE_OF_QWORD: 
 #ifdef DEBUG
-					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG>(reference_address + rva));
+					std::println("[i] Moving RIP from: {:#12x} to: {:#12x}\n", reinterpret_cast<ULONGLONG>(reference_address), *reinterpret_cast<PULONGLONG>(&reference_address[instruction_length + *static_cast<long*>(disposition_ptr)]);
 #endif
-					return *reinterpret_cast<LPBYTE *>(reference_address + rva);
-				}
+					return *reinterpret_cast<LPBYTE *>(&reference_address[instruction_length + *static_cast<long long*>(disposition_ptr)]);
+				
 				default: 
 					State.status = wrong_input;
 					return nullptr;
@@ -473,18 +469,18 @@ void Lde::log_1(const LPBYTE reference_address, const LdeHookingState& State) {
 	if (prefix_count) {
 		std::cout << " Found Prefix Bytes: ";
 		for (; bytes_passed < prefix_count; bytes_passed++) 
-			std::cout << std::format("{:#4X} ", *(reference_address + bytes_passed));
+			std::cout << std::format("{:#4X} ", reference_address[bytes_passed]);
 		std::cout << " | ";
 	}
 	if (opcode_length) {
 		std::cout << "Found Opcode Bytes: ";
 		for (; bytes_passed < prefix_count + opcode_length; bytes_passed++)
-			std::cout << std::format("{:#X} ", *(reference_address + bytes_passed));
+			std::cout << std::format("{:#X} ", reference_address[bytes_passed]);
 	}
 	if (getInstructionLengthCtx(State.currInstructionContext) > opcode_length + prefix_count) {
 		std::cout << " | Found Operands Bytes: ";
 		for (; bytes_passed < instruction_length; bytes_passed++) 
-			std::cout << std::format("{:#04X} ", *(reference_address + bytes_passed));
+			std::cout << std::format("{:#04X} ", reference_address[bytes_passed]);
 	}
 	std::cout << "\n\n";
 }
@@ -500,14 +496,14 @@ void Lde::log_2(BYTE instruction_count, _In_ STATE& State) {
 void Lde::logInstructionAndAddress(const LPBYTE reference_address, const BYTE InstructionContext) {
 	std::cout << std::format("#{:3d} @{:P} ", InstructionContext, reinterpret_cast<void*>(reference_address));
 	for (BYTE i = 0, instruction_length = getInstructionLengthCtx(InstructionContext); i < instruction_length; i++)
-		std::cout << std::format("{:#04X} ", *(reference_address + i));
+		std::cout << std::format("{:#04X} ", reference_address[i]);
 	std::cout << "\n";
 }
 
 void Lde::logInstructionAndAddressCtx(const LPBYTE reference_address, const BYTE CandidateContext, const BYTE instruction_index) {
 	std::cout << std::format("#{:3d} @{:P} ", instruction_index, reinterpret_cast<LPVOID>(reference_address));
-	for (BYTE passed_bytes = 0, instruction_length = getInstructionLengthCtx(CandidateContext); passed_bytes < instruction_length; passed_bytes++)
-		std::cout << std::format("{:#04X} ", *(reference_address + passed_bytes));
+	for (BYTE i = 0, instruction_length = getInstructionLengthCtx(CandidateContext); i < instruction_length; i++)
+		std::cout << std::format("{:#04X} ", reference_address[i]);
 	std::cout << "\n";
 }
 
@@ -527,11 +523,10 @@ BOOLEAN Lde::findAndFixRelocations(const LPBYTE trampoline_gateway_address, cons
 			   prefix_count				= State.prefixCountArray[passed_instructions],
 			  *old_target_address		= rip_relative_address + instruction_length + *reinterpret_cast<int*>(rip_relative_address + prefix_count + opcode_length);
 		hkUINT new_disposition_unsigned = old_target_address - (trampoline_gateway_address + accumulated_length + instruction_length);
-		if (new_disposition_unsigned < TWO_GIGABYTES) {
-			int	new_disposition = static_cast<int>(new_disposition_unsigned);
-			memcpy(trampoline_gateway_address + accumulated_length + opcode_length + prefix_count, &new_disposition, sizeof(new_disposition));
-		} else 
+		if (new_disposition_unsigned >= TWO_GIGABYTES) 
 			return false;
+		int	new_disposition = static_cast<int>(new_disposition_unsigned);
+		memcpy(trampoline_gateway_address + accumulated_length + opcode_length + prefix_count, &new_disposition, sizeof(new_disposition));	
 		array_idx++;
 	}
 	return true;
@@ -566,31 +561,30 @@ void Lde::setContextRipRel(_Inout_ BYTE& CandidateContext) {
 }
 
 void Lde::incrementInstructionLen(_Inout_ BYTE& CandidateContext, _Inout_ LdeErrorCodes& Status) {
-	if ((CandidateContext & 0x3C) < 0x3C) {
-		BYTE new_instruction_length = static_cast<BYTE>((getInstructionLengthCtx(CandidateContext) + 1) << 2);
-		CandidateContext		   &= 0xC3;
-		CandidateContext		   |= new_instruction_length;
-	} else {
+	if ((CandidateContext & 0x3C) == 0x3C) {
 		Status = instruction_overflow;
+		return;
 	}
+	BYTE new_instruction_length = static_cast<BYTE>((getInstructionLengthCtx(CandidateContext) + 1) << 2);
+	CandidateContext		   &= 0xC3;
+	CandidateContext		   |= new_instruction_length;
+	
 }
 
 void Lde::incrementOpcodeLenCtx(BYTE& CandidateContext, LdeErrorCodes& Status) {
-	if ((CandidateContext & 0x03) < 3) {
-		BYTE new_opcode_length = (CandidateContext & 0x03) + 1;
-		CandidateContext &= 0xFC;
-		CandidateContext |= new_opcode_length;
-	} else 
+	if ((CandidateContext & 0x03) == 3) {
 		Status = opcode_overflow;
+		return;
+	}
+	BYTE new_opcode_length = (CandidateContext & 0x03) + 1;
+	CandidateContext &= 0xFC;
+	CandidateContext |= new_opcode_length;
 }
 
 void Lde::setCurrentInstructionLength(_In_ BYTE instruction_length, _Inout_ BYTE& CandidateContext) {
-	if (instruction_length > MAX_INSTRUCTION_SIZE) {
-		std::println("[!] Error @ Lde::setCurrentInstructionLength, Value is greater than 0x0F!\n[i] Received instruction length: {:#X}", static_cast<int>(instruction_length));
-		return;
-	}
-	CandidateContext &= 0xC3;
-	CandidateContext |= instruction_length << 2;
+	instruction_length > MAX_INSTRUCTION_SIZE ?
+		std::println("[!] Error @ Lde::setCurrentInstructionLength, Value is greater than 0x0F!\n[i] Received instruction length: {:#X}", static_cast<int>(instruction_length)):
+		[&CandidateContext, instruction_length] { CandidateContext &= 0xC3; CandidateContext |= instruction_length << 2; }();
 }
 
 BOOLEAN Lde::analyseSibBase(_In_ const BYTE candidate) {
