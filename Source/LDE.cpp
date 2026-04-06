@@ -1,13 +1,14 @@
 #include "Lde.h"
 
-BYTE Lde::mapInstructionLength(const LPVOID analysis_address, inst::Context& InstructionContext, LdeErrorCodes& status) { //Main instruction decoding dispatcher
+[[nodiscard]] BYTE Lde::mapInstructionLength(const LPVOID analysis_address, inst::Context& InstructionContext, LdeErrorCodes& status) { //Main instruction decoding dispatcher
 	if (!analysis_address) {
 		status = no_input;
 		return 0;
 	}
+
 	BYTE* reference_address  = static_cast<LPBYTE>(analysis_address),
 		  instruction_length = InstructionContext.getPreDisposition();
-	if (*static_cast<LPBYTE>(analysis_address) == 0xCC) {
+	if (*reference_address == 0xCC) {
 #ifdef DEBUG
 		std::println("[!] Found Uninitialised memory @: {:#10X} Now Examining The Last instruction...", reinterpret_cast<DWORD64>(analysis_address));
 #endif
@@ -672,7 +673,7 @@ BOOLEAN Lde::traceIntoIAT(LdeHookingState& State) {
 	switch (analyseOpcodeType(static_cast<BYTE *>(State.functionAddress), State.currContext)) {
 		case indirect_far_jump:
 		case indirect_jump: {
-			State.functionAddress = *reinterpret_cast<LPVOID*>(static_cast<BYTE*>(State.functionAddress) + *reinterpret_cast<int*>(static_cast<BYTE*>(State.functionAddress) + State.currContext.getOpcodeLength() + State.getCurrentPrefixCount()) + State.currContext.getLength());
+			State.functionAddress = *reinterpret_cast<LPVOID*>(static_cast<BYTE*>(State.functionAddress) + *reinterpret_cast<int*>(static_cast<BYTE*>(State.functionAddress) + State.currContext.getOpcodeLength() + State.currContext.getPrefixCount()) + State.currContext.getLength());
 			return true;
 		}
 		case jump: {

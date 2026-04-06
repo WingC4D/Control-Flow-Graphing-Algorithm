@@ -132,7 +132,7 @@ fnt::ErrorCode FunctionTree::trace() { using enum blk::TraceResults;
  	return fnt::success;
 }
 
-void Block::logIndex() const {
+void Block::logIndex() const {//Logs index
 	if (idx & COND_BLOCK_MASK) 
 		return idx & C_JUMP_TAKEN_MASK ?
 			std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Taken)\n", idx & MAX_BRANCH_INDEX, height) :
@@ -141,16 +141,6 @@ void Block::logIndex() const {
 	return height ?
 		std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Non Conditional)\n", idx & 0x00FFFFFF, height):
 		std::println("[!] Analysing Root Branch (Non Conditional)\n");
-}
-
-void Block::addResolvedCall(std::vector<unsigned char*>& NewFunctionVec, unsigned char* resolved_address) {
-	BOOLEAN was_added = false;
-	for (LPBYTE stored_func_address: NewFunctionVec) 
-		if ((was_added = stored_func_address == resolved_address)) 
-			break;
-
-	if (!was_added)
-		NewFunctionVec.emplace_back(resolved_address);
 }
 
 void Block::handleEndOfTrace(LPBYTE current_address, LdeState& State) {
@@ -197,7 +187,7 @@ blk::TraceResults Block::trace(_Out_ std::vector<BYTE*>& NewFunctionsVec) { usin
 
 blk::TraceResults Block::traceUntil(_Out_ std::vector<LPBYTE>& NewFunctionsVec, const LPBYTE until_address) { using enum blk::TraceResults;
 	LdeState State;
-	LPBYTE   reference_ptr = landmarksPtr->getRoot();
+	LPBYTE   reference_ptr = landmarksPtr->root;
 	if (reference_ptr == until_address) 
 		return failed;
 	

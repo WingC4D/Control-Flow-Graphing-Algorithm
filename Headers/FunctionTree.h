@@ -50,10 +50,6 @@ struct BlockLandmarks {
 	BlockLandmarks(const LPBYTE root_address, const LPBYTE end_address = nullptr): root(root_address) {
 		end = end_address;
 	}
-
-	BYTE* getRoot() const {
-		return const_cast<BYTE*>(root);
-	}
 };
 
 struct Block {
@@ -92,7 +88,15 @@ struct Block {
 
 	void handleEndOfTrace(LPBYTE current_address, LdeState& State);
 
-	inline static void addResolvedCall(std::vector<LPBYTE>& NewFunctionVec, LPBYTE resolved_address);
+	static void addResolvedCall(std::vector<LPBYTE>& NewFunctionVec, LPBYTE resolved_address) {
+		BOOLEAN was_added = false;
+		for (LPBYTE stored_func_address : NewFunctionVec)
+			if ((was_added = stored_func_address == resolved_address))
+				break;
+
+		if (!was_added)
+			NewFunctionVec.emplace_back(resolved_address);
+	}
 };
 
 enum AddBlock: BYTE {

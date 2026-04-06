@@ -52,8 +52,8 @@ namespace inst {
 		uint16_t rexW		  : 1 = 0;
 		uint16_t ripRelative  : 1 = 0;
 		uint16_t pfxCount	  : 4 = 0;
-		protected:
-			uint16_t reserved : 4 = 0;
+	protected:
+		uint16_t reserved : 4 = 0;
 	public:
 		BOOLEAN isRexW () const  {
 			return rexW;
@@ -84,22 +84,35 @@ namespace inst {
 		}
 
 		BOOLEAN setLength(BYTE new_length) {
-			return new_length <= MAX_INSTRUCTION_SIZE ?
-				[&]->BOOLEAN { length = new_length; return true; }() : false;
+			if (new_length > MAX_INSTRUCTION_SIZE)
+				return false;
+
+			length = new_length;
+			return true;
 		}
 
 		BOOLEAN incrementPrefixCount() {
-			return pfxCount < MAX_PREFIX_COUNT ? [&]->BOOLEAN { pfxCount++; return true; }() : false;
+			if (pfxCount == MAX_PREFIX_COUNT)
+				return false;
+
+			pfxCount++;
+			return true;
 		}
 
 		BOOLEAN incrementOpcode() {
-			return opcodeLength != 3 ?
-				[&]->BOOLEAN { opcodeLength++; return true; }() : false;
+			if (opcodeLength == 3)
+				return false;
+
+			opcodeLength++;
+			return true;
 		}
 
 		BOOLEAN setPrefixCount(BYTE new_count)  {
-			return new_count < MAX_PREFIX_COUNT ?
-				[this, &new_count]->BOOLEAN { pfxCount = new_count;  return true; }() : false;
+			if (new_count > MAX_PREFIX_COUNT) 
+				return false;
+
+			pfxCount = new_count;
+			return true;
 		}
 
 		void setRipRelative() {
@@ -111,6 +124,7 @@ namespace inst {
 		}
 	};
 }
+
 enum Register: BYTE {
 	ax, bx, cx, dx,sp, bp, si, di
 };
@@ -144,11 +158,9 @@ struct LdeHookingState: LdeCommon {
 	BYTE		  ripIndexesCount = 0,
 				  ripRelativeIndexesArray[RELATIVE_TRAMPOLINE_SIZE]{};
 	inst::Context contextsArray[RELATIVE_TRAMPOLINE_SIZE]{};
-	LdeHookingState(LPVOID target_address): functionAddress(target_address) {}
-	BYTE getCurrentPrefixCount()const {
-		return currContext.getPrefixCount();
-	}
 
+	LdeHookingState(LPVOID target_address): functionAddress(target_address) {}
+	
 	void prepareForNextStep() {
 		contextsArray[instructionCount] = currContext;
 		currContext						= inst::Context{};
@@ -157,8 +169,10 @@ struct LdeHookingState: LdeCommon {
 	void reset() {
 		for (BYTE i = 0; i < instructionCount; i++) 
 			contextsArray[i] = inst::Context{};
+
 		for (BYTE i = 0; i < ripIndexesCount; i++)
 			ripRelativeIndexesArray[i] = 0;
+
 		currContext      = inst::Context{};
 		ripIndexesCount  = 0;
 		instructionCount = 0;
@@ -166,18 +180,14 @@ struct LdeHookingState: LdeCommon {
 };
 
 struct LdeState: LdeCommon {
-	BYTE			  newBlocksCount;
 	std::vector<inst::Context> contextsArray;
-	LdeState():
-	contextsArray(BLOCK_MAX_INSTRUCTIONS) {
-		status			= success;
-		instructionCount = 0;
-		newBlocksCount	 = 0;
-	}
+
+	LdeState(): contextsArray(BLOCK_MAX_INSTRUCTIONS) {}
+
 	BYTE getCurrentPrefixCount() const {
 		return currContext.getPrefixCount();
-
 	}
+
 	void prepareForNextStep() {
 		contextsArray[instructionCount] = currContext;
 		currContext					    = inst::Context{};
@@ -219,7 +229,7 @@ class Lde { friend FunctionTree; friend  Block;
 
 	static blk::TraceResults checkForNewBlock(inst::Context& InstructionContext, LPBYTE lpReference);
 
-	[[nodiscard]] static BYTE mapInstructionLength(_In_ LPVOID analysis_address, _Inout_ inst::Context& InstructionContext, _Inout_ LdeErrorCodes& status);
+	[[nodiscard]] static BYTE mapInstructionLength(LPVOID analysis_address, inst::Context& InstructionContext, LdeErrorCodes& status);
 
 	enum first_byte_traits: BYTE {
 		none		    = 0x00,
@@ -234,8 +244,6 @@ class Lde { friend FunctionTree; friend  Block;
 	};
 
 	static void logInstructionAndAddressCtx(_In_ LPBYTE reference_address, _In_ inst::Context CandidateContext, BYTE instruction_index);
-
-	inline static void resetHookingContexts(_Inout_ LdeHookingState& State);
 
 	static BOOLEAN traceIntoIAT(LdeHookingState& State);
 
