@@ -76,7 +76,7 @@ namespace inst {
 		}
 
 		BYTE getDisposition() const {
-			return length - pfxCount - getOpcodeLength();
+			return length - getPreDisposition();
 		}
 
 		BYTE getPreDisposition() const {
@@ -88,6 +88,14 @@ namespace inst {
 				return false;
 
 			length = new_length;
+			return true;
+		}
+
+		BOOLEAN incrementLength() {
+			if (length == MAX_INSTRUCTION_SIZE) 
+				return false;
+			
+			length++;
 			return true;
 		}
 
@@ -104,6 +112,14 @@ namespace inst {
 				return false;
 
 			opcodeLength++;
+			return true;
+		}
+
+		BOOLEAN increaseLength(BYTE to_add) {
+			if (length + to_add > MAX_INSTRUCTION_SIZE) 
+				return false;
+			
+			length += to_add;
 			return true;
 		}
 
@@ -137,7 +153,8 @@ enum LdeErrorCodes: BYTE {
 	opcode_overflow,
 	prefix_overflow,
 	instruction_overflow,
-	reached_end_of_branch
+	reached_end_of_branch,
+	reached_uninitialized_memory
 
 };
 
@@ -229,7 +246,7 @@ class Lde { friend FunctionTree; friend  Block;
 
 	static blk::TraceResults checkForNewBlock(inst::Context& InstructionContext, LPBYTE lpReference);
 
-	[[nodiscard]] static BYTE mapInstructionLength(LPVOID analysis_address, inst::Context& InstructionContext, LdeErrorCodes& status);
+	[[nodiscard]] static BYTE mapInstructionLength(LPBYTE analysis_address, inst::Context& InstructionContext, LdeErrorCodes& status);
 
 	enum first_byte_traits: BYTE {
 		none		    = 0x00,
