@@ -1,0 +1,181 @@
+#pragma once
+#ifndef WIN32
+    typedef unsigned char  BYTE, *LPBYTE;
+    typedef unsigned short WORD;
+    typedef unsigned long  DWORD;
+    typedef                BYTE BOOLEAN;
+    typedef void           VOID, * LPVOID;
+#endif
+typedef unsigned long  long QWORD;
+
+enum LdeErrorCodes: BYTE;
+
+namespace inst {
+    namespace opcodes {
+        enum types: WORD {
+	    	inc				  = 0x0000,
+	    	dec				  = 0x0001,
+	    	mov				  = 0x0002,
+	    	call			  = 0x0003,
+	    	jump			  = 0x0004,
+	    	pop				  = 0x0005,
+	    	push			  = 0x0006,
+	    	lea				  = 0x0007,
+	    	add				  = 0x0008,
+	    	sub				  = 0x0009,
+	    	mul				  = 0x000A,
+	    	imul			  = 0x000B,
+	    	div				  = 0x000C,
+	    	idiv			  = 0x000D,
+	    	ret				  = 0x000E,
+	    	exchange		  = 0x000F,
+	    	loop			  = 0x0010,
+	    	_short			  = 0x0200,
+	    	_near			  = 0x0400,
+	    	_far			  = 0x0800,
+	    	_sys			  = 0x1000,
+	    	sys_exit		  = 0x1100,
+	    	sys_enter		  = 0x1200,
+	    	sys_call		  = 0x1002,
+	    	sys_ret			  = 0x1400,
+	    	conditional		  = 0x2000,
+	    	indirect		  = 0x3007,
+	    	indirect_inc	  = 0x3001,
+	    	indirect_dec	  = 0x3002,
+	    	indirect_call	  = 0x3003,
+	    	indirect_far_call = 0x3803,
+	    	indirect_jump	  = 0x3004,
+	    	indirect_far_jump = 0x3804,
+	    	indirect_push	  = 0x3005,
+	    	indirect_invalid  = 0x3006,
+	    	unknown			  = 0xFFFF
+	    };
+
+        
+        constexpr BYTE RETURN = 0xC3,
+                       JUMP   = 0xE9,
+                       CALL   = 0xE8;
+    }
+
+	constexpr BYTE MAX_OPCODE_SIZE = 0x04,
+				   MAX_PREFIXES    = 0x0E,
+				   MAX_SIZE        = 0x0F;
+
+
+    
+    
+
+    inline BOOLEAN analyseSibBase(LPBYTE preceding_word_ptr) {
+        return (preceding_word_ptr[2] & 0x07) == 5;
+    }
+    class Context {
+		WORD opcode_length : 2 = 0,
+		     length        : 4 = 0,
+		     rex_w         : 1 = 0,
+		     rip_relative  : 1 = 0,
+		     prefix_count  : 4 = 0,
+             has_SIB       : 1 = 0,
+		     shortened     : 1 = 0;
+
+	protected:
+		WORD reserved      : 2 = 0;
+    private:
+        LdeErrorCodes analyseModRM(LPBYTE preceding_byte_ptr),
+                      analyseSpecialGroup(LPBYTE preceding_byte_ptr),
+                      analyseGroup3(LPBYTE analysis_address),
+                      analyseF6(LPBYTE preceding_byte_ptr),
+                      analyseF7(LPBYTE preceding_byte_ptr);
+	public:
+        LPBYTE        resolveJump(LPVOID analysis_address);
+        WORD          analyseOpcodeType(LPBYTE analysis_address);
+        LdeErrorCodes map(LPBYTE analysis_address);
+
+		BOOLEAN isRexW() const {
+			return rex_w;
+		}
+
+		BOOLEAN isRipRelative() const {
+			return rip_relative;
+		}
+
+		BOOLEAN isShortened() const {
+			return shortened;
+		}
+
+		BYTE getLength() const {
+			return length;
+		}
+
+		BYTE getPrefixCount() const {
+			return prefix_count;
+		}
+
+		BYTE getOpcodeLength() const {
+			return opcode_length + 1;
+		}
+
+		BYTE getDisposition() const {
+			return length - getPreDisposition();
+		}
+
+		BYTE getPreDisposition() const {
+			return prefix_count + getOpcodeLength();
+		}
+
+		BOOLEAN setLength(BYTE new_length) {
+			if (new_length > MAX_SIZE)
+				return false;
+
+			length = new_length;
+			return true;
+		}
+
+		BOOLEAN incrementLength() {
+			if (length == MAX_SIZE)
+				return false;
+
+			length++;
+			return true;
+		}
+
+		BOOLEAN incrementPrefixCount() {
+			if (prefix_count == MAX_PREFIXES)
+				return false;
+
+			prefix_count++;
+			return true;
+		}
+
+		BOOLEAN incrementOpcode() {
+			if (opcode_length == 3)
+				return false;
+
+			opcode_length++;
+			return true;
+		}
+
+		BOOLEAN increaseLength(BYTE to_add) {
+			if (length + to_add > MAX_SIZE)
+				return false;
+
+			length += to_add;
+			return true;
+		}
+
+		BOOLEAN setPrefixCount(BYTE new_count) {
+			if (new_count > MAX_PREFIXES)
+				return false;
+
+			prefix_count = new_count;
+			return true;
+		}
+
+		void setRipRelative() {
+			rip_relative = true;
+		}
+
+		void setRexW() {
+			rex_w = true;
+		}
+	};
+}

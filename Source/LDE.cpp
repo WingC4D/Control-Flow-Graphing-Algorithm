@@ -16,7 +16,9 @@ BYTE Lde::mapInstructionLength(const LPBYTE analysis_address, inst::Context& Ins
 #endif
 		return 0;
 	}
-	switch (results[*analysis_address]) {
+    BOOLEAN check = InstructionContext.getPrefixCount() == 0;
+
+ 	switch (results[*analysis_address]) {
 		case none: 
 			if (*analysis_address == opcodes::RETURN || *analysis_address == 0xC2)
 				status = reached_end_of_function;
@@ -54,25 +56,45 @@ BYTE Lde::mapInstructionLength(const LPBYTE analysis_address, inst::Context& Ins
 			std::println("[x] You don't handle yet has_mod_rm | imm_eight_bytes | imm_four_bytes, (Found @{:p})", reinterpret_cast<void*>(analysis_address));
 			break;
 		
-		case imm_one_byte: 
+		case imm_one_byte:
+			if (!InstructionContext.increaseLength(SIZE_OF_BYTE)) {
+				status = instruction_overflow;
+				return 0;
+			}
 			instruction_length += SIZE_OF_BYTE;
 			break;
 		
-		case imm_two_bytes: 
+		case imm_two_bytes:
+			if (!InstructionContext.increaseLength(SIZE_OF_WORD)) {
+				status = instruction_overflow;
+				return 0;
+			}
 			instruction_length += SIZE_OF_WORD;
 			break;
 		
-		case imm_four_bytes: 
+		case imm_four_bytes:
+			if (!InstructionContext.increaseLength(SIZE_OF_DWORD)) {
+				status = instruction_overflow;
+				return 0;
+			}
 			instruction_length += SIZE_OF_DWORD;
 			break;
 		
-		case imm_eight_bytes: 
+		case imm_eight_bytes:
+			if (!InstructionContext.increaseLength(SIZE_OF_QWORD)) {
+				status = instruction_overflow;
+				return 0;
+			}
 			instruction_length += SIZE_OF_QWORD;
 			break;
 		
 		case imm_four_bytes | imm_eight_bytes: 
 			if (*analysis_address == opcodes::CALL || *analysis_address == opcodes::JUMP)
 				InstructionContext.setRipRelative();
+			if (!InstructionContext.increaseLength(SIZE_OF_DWORD)) {
+				status = instruction_overflow;
+				return 0;
+			}
 			instruction_length += InstructionContext.isRexW() ? SIZE_OF_QWORD : SIZE_OF_DWORD;
 			break;
 		
@@ -96,8 +118,18 @@ BYTE Lde::mapInstructionLength(const LPBYTE analysis_address, inst::Context& Ins
 			return 0;
 		
 	}
+    
+    if (check) {
+        inst::Context ctx{};
+        auto result = ctx.map(analysis_address);
 
-	InstructionContext.setLength(instruction_length);
+        if (result != success && result != reached_end_of_function)
+            std::cout << "";
+
+        if (ctx.getLength() != instruction_length)
+		    InstructionContext.setLength(instruction_length);
+    }
+    InstructionContext.setLength(instruction_length);
 	return status != success && status != reached_end_of_function ? 0 : InstructionContext.getLength();
 }
 
@@ -147,10 +179,6 @@ BYTE Lde::analyseModRm(const LPBYTE preceding_byte_ptr, inst::Context& Instructi
 				return 0;
 			}
 			if (rm_bits == 4) {
-				if (!InstructionContext.incrementOpcode()) {
-					status = opcode_overflow;
-					return 0;
-				}
 				if (!InstructionContext.incrementLength()) {
 					status = instruction_overflow;
 					return 0;
@@ -162,19 +190,15 @@ BYTE Lde::analyseModRm(const LPBYTE preceding_byte_ptr, inst::Context& Instructi
 		default: 
 			if (rm_bits == 4) {
 				added_length++;
-				if (!InstructionContext.incrementOpcode()) {
-					status = opcode_overflow;
-					return 0;
-				}
+                if (!InstructionContext.incrementOpcode()) {
+                    status = opcode_overflow;
+                    return 0;
+                }
 				if (!InstructionContext.incrementLength()) {
 					status = instruction_overflow;
 					return 0;
 				}
 				if (analyseSibBase(preceding_byte_ptr[2])) {
-					if (!InstructionContext.incrementLength()) {
-						status = instruction_overflow;
-						return 0;
-					}
 					added_length += SIZE_OF_DWORD;
 				}
 				break;
@@ -185,7 +209,6 @@ BYTE Lde::analyseModRm(const LPBYTE preceding_byte_ptr, inst::Context& Instructi
 				break;
 			}
 			break;
-		
 	}
 	return added_length;
 }
@@ -345,6 +368,7 @@ LPBYTE Lde::resolveJump(const LPBYTE address_to_resolve) {
 	LdeJumpResolutionState State(address_to_resolve);
 	if (!mapInstructionLength(static_cast<BYTE*>(State.toResolve), State.currContext, State.status))
 		return nullptr;
+
 	*State.contextsArray	   = State.currContext;
 	BYTE   disposition_size	   = State.currContext.getDisposition();
 	LPVOID disposition_address = address_to_resolve + State.currContext.getPreDisposition(),

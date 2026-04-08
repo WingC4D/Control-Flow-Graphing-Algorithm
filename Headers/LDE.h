@@ -1,5 +1,6 @@
 #pragma once
 #include <Windows.h>
+#include "Context.h"
 #include "FunctionTree.h"
 #ifndef hUINT
 	#define LOCAL_PROCESS_HANDLE reinterpret_cast<HANDLE>(-1)
@@ -43,103 +44,6 @@ constexpr BYTE SIZE_OF_BYTE				= 0x01,
                DISPOSITIONS_MASK		= 0x30,
                BLOCK_MAX_INSTRUCTIONS	= 0xA0;
 
-
-namespace inst {
-
-	class Context {
-		uint16_t opcodeLength : 2 = 0;
-		uint16_t length		  : 4 = 0;
-		uint16_t rexW		  : 1 = 0;
-		uint16_t ripRelative  : 1 = 0;
-		uint16_t pfxCount	  : 4 = 0;
-	protected:
-		uint16_t reserved : 4 = 0;
-	public:
-		BOOLEAN isRexW () const  {
-			return rexW;
-		}
-
-		BOOLEAN isRipRelative() const {
-			return ripRelative;
-		}
-
-		BYTE getLength() const { 
-			return length;
-		}
-
-		BYTE getPrefixCount() const {
-			return pfxCount;
-		}
-
-		BYTE getOpcodeLength() const {
-			return opcodeLength + 1;
-		}
-
-		BYTE getDisposition() const {
-			return length - getPreDisposition();
-		}
-
-		BYTE getPreDisposition() const {
-			return pfxCount + getOpcodeLength();
-		}
-
-		BOOLEAN setLength(BYTE new_length) {
-			if (new_length > MAX_INSTRUCTION_SIZE)
-				return false;
-
-			length = new_length;
-			return true;
-		}
-
-		BOOLEAN incrementLength() {
-			if (length == MAX_INSTRUCTION_SIZE) 
-				return false;
-			
-			length++;
-			return true;
-		}
-
-		BOOLEAN incrementPrefixCount() {
-			if (pfxCount == MAX_PREFIX_COUNT)
-				return false;
-
-			pfxCount++;
-			return true;
-		}
-
-		BOOLEAN incrementOpcode() {
-			if (opcodeLength == 3)
-				return false;
-
-			opcodeLength++;
-			return true;
-		}
-
-		BOOLEAN increaseLength(BYTE to_add) {
-			if (length + to_add > MAX_INSTRUCTION_SIZE) 
-				return false;
-			
-			length += to_add;
-			return true;
-		}
-
-		BOOLEAN setPrefixCount(BYTE new_count)  {
-			if (new_count > MAX_PREFIX_COUNT) 
-				return false;
-
-			pfxCount = new_count;
-			return true;
-		}
-
-		void setRipRelative() {
-			ripRelative = true;
-		}
-
-		void setRexW() {
-			rexW = true;
-		}
-	};
-}
 
 enum Register: BYTE {
 	ax, bx, cx, dx,sp, bp, si, di
@@ -205,7 +109,7 @@ struct LdeState: LdeCommon {
 		return currContext.getPrefixCount();
 	}
 
-	void prepareForNextStep() {
+	void prepareNextStep() {
 		contextsArray[instructionCount] = currContext;
 		currContext					    = inst::Context{};
 		instructionCount++;
@@ -235,8 +139,11 @@ enum state: BYTE {
 	branch_is_obfuscated
 };
 
-namespace blk { enum TraceResults : BYTE; }
-class Lde { friend FunctionTree; friend  Block;
+namespace blk {
+    enum TraceResults : BYTE;
+}
+
+class Lde { friend FunctionTree; friend  Block; friend inst::Context;
 
 	static BYTE getValidInstructionsSizeHook(_Inout_ LPVOID& target_address, _Out_ LdeHookingState& State);
 
@@ -332,7 +239,6 @@ class Lde { friend FunctionTree; friend  Block;
 		indirect_invalid  = 0x3006,
 		unknown			  = 0xFFFF
 	};
-protected:
 	static constexpr BYTE results[0x100] = {
 		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm | prefix,
 		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
@@ -344,11 +250,11 @@ protected:
 		imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte,
 		has_mod_rm | imm_one_byte, has_mod_rm | imm_four_bytes, has_mod_rm | imm_one_byte, has_mod_rm | imm_one_byte, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm,
 		none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none,
-		imm_eight_bytes, imm_eight_bytes, imm_eight_bytes, imm_eight_bytes, none, none, none, none, imm_one_byte, imm_eight_bytes | imm_four_bytes, none, none, none, none, none, none,
-		imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes,
-		has_mod_rm | imm_one_byte, has_mod_rm | imm_one_byte, imm_two_bytes, none, has_mod_rm, has_mod_rm, has_mod_rm | imm_one_byte, has_mod_rm | imm_four_bytes, imm_two_bytes | imm_one_byte, none, imm_two_bytes, none, none, imm_one_byte, none, none,
-		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm,
-		imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, none, none, none, none, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, none, imm_one_byte, none, none, none, none,
-		prefix, none, prefix, prefix, none, none, has_mod_rm | special, has_mod_rm | special, none, none, none, none, none, none, has_mod_rm, has_mod_rm
+		/*A*/imm_eight_bytes, imm_eight_bytes, imm_eight_bytes, imm_eight_bytes, none, none, none, none, imm_one_byte, imm_eight_bytes | imm_four_bytes, none, none, none, none, none, none,
+		/*B*/imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes,
+		/*C*/has_mod_rm | imm_one_byte, has_mod_rm | imm_one_byte, imm_two_bytes, none, has_mod_rm, has_mod_rm, has_mod_rm | imm_one_byte, has_mod_rm | imm_four_bytes, imm_two_bytes | imm_one_byte, none, imm_two_bytes, none, none, imm_one_byte, none, none,
+		/*D*/has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm,
+		/*E*/imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, none, none, none, none, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, none, imm_one_byte, none, none, none, none,
+		/*F*/prefix, none, prefix, prefix, none, none, has_mod_rm | special, has_mod_rm | special, none, none, none, none, none, none, has_mod_rm, has_mod_rm
 	};
 };

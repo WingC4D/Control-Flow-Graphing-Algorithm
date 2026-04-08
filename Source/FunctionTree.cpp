@@ -106,11 +106,11 @@ fnt::ErrorCode FunctionTree::trace() { using enum blk::TraceResults;
 		FunctionTreeTraceCtx TraceContext{ .rootsMap = RootsMap, .currentBlock = CurrentBlock, .explorationVec = ExplorationVec };
 		switch (traceResult) {
 			case reachedJump: 
-				handleJump(Lde::resolveJump(CurrentBlock.landmarksPtr->end), vector_size, TraceContext);
+				handleJump((--CurrentBlock.ldeState->contextsArray.end())->resolveJump(CurrentBlock.landmarksPtr->end), vector_size, TraceContext);
 				break;
 			
 			case reachedConditionalJump: {
-				LPBYTE resolved_jump		  = Lde::resolveJump(CurrentBlock.landmarksPtr->end),
+				LPBYTE resolved_jump		  = (--CurrentBlock.ldeState->contextsArray.end())->resolveJump(CurrentBlock.landmarksPtr->end),
 					   next_instruction		  = CurrentBlock.landmarksPtr->end + (--CurrentBlock.ldeState->contextsArray.end())->getLength();
 				auto   ConditionalJumpContext = next_instruction < resolved_jump ?
 					ConditionalJumpCtx{ .shallowPtr = next_instruction, .deepPtr = resolved_jump, .shallowIdx = vector_size | COND_BLOCK_MASK, .deepIdx = vector_size + 1 | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK }:
@@ -144,20 +144,21 @@ void Block::logIndex() const {//Logs index
 }
 
 void Block::handleEndOfTrace(LPBYTE current_address, LdeState& State) {
-	State.contextsArray.resize(State.instructionCount);
-	ldeState		  = std::make_unique<LdeState>(State);
+    State.contextsArray.resize(State.instructionCount);
+    ldeState		  = std::make_unique<LdeState>(State);
 	landmarksPtr->end = current_address;
 }
 
 blk::TraceResults Block::trace(_Out_ std::vector<BYTE*>& NewFunctionsVec) { using enum blk::TraceResults;
 	LPBYTE	 tracing_address = landmarksPtr->root;
 	LdeState State;
-	while (State.instructionCount < BLOCK_MAX_INSTRUCTIONS && State.status == success) {
-		BYTE instruction_length = Lde::mapInstructionLength(tracing_address, State.currContext, State.status);
-		if (!instruction_length) 
+	while (State.instructionCount < BLOCK_MAX_INSTRUCTIONS - 1) {
+        State.status = State.currContext.map(tracing_address);
+	    if (State.status != success && State.status != reached_end_of_function) 
 			return failed;
-		State.prepareForNextStep();
-		switch (Lde::checkForNewBlock(State.currContext, tracing_address)) {
+        auto length = State.currContext.getLength();
+	    State.prepareNextStep();
+		switch (Lde::checkForNewBlock(State.contextsArray[State.instructionCount - 1], tracing_address)) {
 			case reachedJump: 
 				handleEndOfTrace(tracing_address, State);
 				return reachedJump;
@@ -166,7 +167,9 @@ blk::TraceResults Block::trace(_Out_ std::vector<BYTE*>& NewFunctionsVec) { usin
 				handleEndOfTrace(tracing_address, State);
 				return reachedConditionalJump;
 			
-			case reachedCall: 
+			case reachedCall:
+                ldeState->currContext.resolveJump(tracing_address);
+		        
 				addResolvedCall(NewFunctionsVec, Lde::resolveJump(tracing_address));
 				break;
 
@@ -180,7 +183,8 @@ blk::TraceResults Block::trace(_Out_ std::vector<BYTE*>& NewFunctionsVec) { usin
 			case noNewBlock: 
 				break;
 		}
-		tracing_address += instruction_length;
+		tracing_address += length;
+        ;
 	}
 	return failed;
 }
@@ -197,7 +201,7 @@ blk::TraceResults Block::traceUntil(_Out_ std::vector<LPBYTE>& NewFunctionsVec, 
 			return noNewBlock;
 		}
 		BYTE instruction_length = Lde::mapInstructionLength(reference_ptr, State.currContext, State.status);
-		State.prepareForNextStep();
+		State.prepareNextStep();
 		switch (Lde::checkForNewBlock(State.currContext, reference_ptr)) {
 			case reachedJump: 
 				handleEndOfTrace(reference_ptr, State);

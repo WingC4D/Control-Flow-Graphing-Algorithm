@@ -23,23 +23,23 @@ namespace blk {
 }
 
 constexpr DWORD NEW_FUNCTIONS_BASE_SIZE = 0x00,
-			    ENDS_UNCOND_JUMP		= 0x20000000,
-				COND_BLOCK_MASK		    = 0X80000000,
-				C_JUMP_TAKEN_MASK		= 0X40000000,
-				MAX_BRANCH_INDEX		= 0X1FFFFFFF,
-				INVALID_BLOCK_INDEX		= 0xFFFFFFFF;
+                ENDS_UNCOND_JUMP        = 0x20000000,
+                COND_BLOCK_MASK         = 0X80000000,
+                C_JUMP_TAKEN_MASK       = 0X40000000,
+				MAX_BRANCH_INDEX        = 0X1FFFFFFF,
+				INVALID_BLOCK_INDEX	    = 0xFFFFFFFF;
 
 struct BlockPrerequisites {
 	LPBYTE root;
 	DWORD  idx,
-		   parent_idx,
-		   height;
+           parent_idx,
+           height;
 
 	BlockPrerequisites(const LPBYTE candidate_address, const DWORD index, const DWORD parent_index, const DWORD prq_height) {
-		root	   = candidate_address;
-		idx		   = index;
-		parent_idx = parent_index;
-		height	   = prq_height;
+        root       = candidate_address;
+        idx        = index;
+        parent_idx = parent_index;
+        height     = prq_height;
 	}
 };
 
@@ -54,11 +54,11 @@ struct BlockLandmarks {
 
 struct Block {
 	std::unique_ptr<BlockLandmarks> landmarksPtr;
-	DWORD							idx;
-	DWORD							height;
-	std::unique_ptr<LdeState>		ldeState;
-	std::vector<DWORD>				flowFromVec;
-	std::vector<DWORD>				flowToVec;
+	DWORD                           idx;
+	DWORD                           height;
+	std::unique_ptr<LdeState>       ldeState;
+	std::vector<DWORD>              flowFromVec;
+	std::vector<DWORD>              flowToVec;
 
 	Block(const LPBYTE root_address, DWORD parent_index, DWORD index, DWORD blk_height):
 	landmarksPtr(std::make_unique<BlockLandmarks>(root_address)), ldeState(std::make_unique<LdeState>()), flowFromVec(0), flowToVec(0) {
@@ -126,7 +126,7 @@ namespace fnt {
 }
 
 struct FunctionTree {
-	LPBYTE						  const root;
+	LPBYTE                        const root;
 	std::vector<std::unique_ptr<Block>> blocksVec;
 	std::vector<BYTE*>					newFunctionsVec;
 	std::vector<DWORD>					leavesVec;
