@@ -94,25 +94,27 @@ fnt::ErrorCode FunctionTree::trace() { using enum blk::TraceResults;
 	std::map		   RootsMap{std::pair{root, blocksVec[0].get()}};
 	while (!ExplorationVec.empty()) {
 		DWORD  vector_size  =  static_cast<DWORD>(blocksVec.size());
-	    Block& CurrentBlock	= *blocksVec[*--ExplorationVec.end()];
+	    Block& CurrentBlock	= *blocksVec[ExplorationVec.back()];
 		if (vector_size == MAX_BRANCH_INDEX) 
 			return fnt::failed;
 		ExplorationVec.pop_back();
 		if (CurrentBlock.landmarksPtr->end) 
 			continue;
 		const auto traceResult = CurrentBlock.trace(newFunctionsVec);
-		if (checkIfTraced(CurrentBlock, RootsMap)) 
+
+	    if (checkIfTraced(CurrentBlock, RootsMap)) 
 			continue;
 		FunctionTreeTraceCtx TraceContext{ .rootsMap = RootsMap, .currentBlock = CurrentBlock, .explorationVec = ExplorationVec };
-		switch (traceResult) {
+
+	    switch (traceResult) {
 			case reachedJump: 
-				handleJump((--CurrentBlock.ldeState->contextsArray.end())->resolveJump(CurrentBlock.landmarksPtr->end), vector_size, TraceContext);
+				handleJump(CurrentBlock.ldeState->contextsArray.back().resolveJump(CurrentBlock.landmarksPtr->end), vector_size, TraceContext);
 				break;
                 
 			case reachedConditionalJump: {
-                const BYTE* const resolved_jump          = (--CurrentBlock.ldeState->contextsArray.end())->resolveJump(CurrentBlock.landmarksPtr->end),
-			              * const next_instruction       = CurrentBlock.landmarksPtr->end + (--CurrentBlock.ldeState->contextsArray.end())->getLength();
-				const auto        ConditionalJumpContext = next_instruction < resolved_jump ?
+                const BYTE* const resolved_jump          = CurrentBlock.ldeState->contextsArray.back().resolveJump(CurrentBlock.landmarksPtr->end),
+			              * const next_instruction       = CurrentBlock.landmarksPtr->end + CurrentBlock.ldeState->contextsArray.back().getLength();
+			    const auto        ConditionalJumpContext = next_instruction < resolved_jump ?
 					ConditionalJumpCtx{ .shallow_ptr = next_instruction, .deep_ptr = resolved_jump, .shallowIdx = vector_size | COND_BLOCK_MASK, .deepIdx = vector_size + 1 | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK }:
 					ConditionalJumpCtx{ .shallow_ptr = resolved_jump, .deep_ptr = next_instruction, .shallowIdx = vector_size | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK, .deepIdx = vector_size + 1 | COND_BLOCK_MASK };
 				handleJump(ConditionalJumpContext.shallow_ptr, ConditionalJumpContext.shallowIdx ,TraceContext);

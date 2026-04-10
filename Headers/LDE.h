@@ -15,8 +15,8 @@
 #endif
 
 
-struct FunctionTree;
-struct Block;
+class FunctionTree;
+class Block;
 interface LdeCommon;
 constexpr BYTE SIZE_OF_BYTE				= 0x01,
                SIZE_OF_WORD				= 0x02,
@@ -67,7 +67,7 @@ namespace blk {
 
 
 struct LdeCommon { using enum inst::Context::Status;
-    inst::Context         currContext{};
+    inst::Context         currContext;
 	inst::Context::Status status            = success;
 	BYTE                  instruction_count = 0;
     DWORD                 size              = 0;
@@ -106,7 +106,7 @@ struct LdeState: LdeCommon {
 	LdeState(): contextsArray(BLOCK_MAX_INSTRUCTIONS) {}
 
 	void prepareNextStep() {
-        size += currContext.getLength();
+        size                            += currContext.getLength();
         contextsArray[instruction_count] = currContext;
         currContext.clear();
         instruction_count++;
@@ -121,6 +121,10 @@ struct LdeState: LdeCommon {
 
     DWORD getLastInstHeadOffset() {
         return size - (--contextsArray.end())->getLength();
+    }
+
+    const BYTE *resolveJumpLastInstruction(const BYTE * const last_instruction_head) {
+        return contextsArray.back().resolveJump(last_instruction_head);
     }
 };
 
