@@ -44,11 +44,11 @@ struct BlockPrerequisites {
 };
 
 struct BlockLandmarks { 
-	BYTE* const root,
-			   *end;
+    const BYTE* const root,
+              * end;
 
-	BlockLandmarks(const LPBYTE root_address, const LPBYTE end_address = nullptr): root(root_address) {
-		end = end_address;
+	BlockLandmarks(const BYTE* const root_address, const BYTE*end_address = nullptr): root(root_address) {
+        end = end_address;
 	}
 };
 
@@ -60,7 +60,7 @@ struct Block {
 	std::vector<DWORD>              flowFromVec;
 	std::vector<DWORD>              flowToVec;
 
-	Block(const LPBYTE root_address, DWORD parent_index, DWORD index, DWORD blk_height):
+	Block(const BYTE* root_address, DWORD parent_index, DWORD index, DWORD blk_height):
 	landmarksPtr(std::make_unique<BlockLandmarks>(root_address)), ldeState(std::make_unique<LdeState>()), flowFromVec(0), flowToVec(0) {
 		if (parent_index != 0xFFFFFFFF)
 			flowFromVec.emplace_back(parent_index);
@@ -72,30 +72,28 @@ struct Block {
 
 	void logIndex() const;
 
-	void findNewEnd(LPBYTE interlacing_root_ptr) const;
+	void findNewEnd(const BYTE *interlacing_root_ptr) const;
 
 	BOOLEAN isInstructionHead(LPBYTE candidate_address) const;
 
-	blk::TraceResults trace(std::vector<LPBYTE>& NewFunctionsVec);
+	blk::TraceResults trace(std::vector<const BYTE*>& NewFunctionsVec) const;
 
-	blk::TraceResults traceUntil(std::vector<LPBYTE>& NewFunctionsVec, LPBYTE until_address);
+	blk::TraceResults traceUntil(std::vector<const BYTE*>& NewFunctionsVec, LPBYTE until_address);
 
-	BOOLEAN isInRange(LPBYTE candidate_address) const;
+	BOOLEAN isInRange(const BYTE* candidate_address) const;
 
 	inline DWORD getIndex() const;
 	
-	inline void resize(BYTE new_size, LPBYTE new_end_address) const;
+	inline void resize(BYTE new_size, const BYTE *new_end_address) const;
 
-	void handleEndOfTrace(LPBYTE current_address, LdeState& State);
+	void handleEndOfTrace(const BYTE* current_address, LdeState& State);
 
-	static void addResolvedCall(std::vector<LPBYTE>& NewFunctionVec, LPBYTE resolved_address) {
-		BOOLEAN was_added = false;
-		for (LPBYTE stored_func_address : NewFunctionVec)
-			if ((was_added = stored_func_address == resolved_address))
-				break;
+	static void addResolvedCall(std::vector<const BYTE*>& NewFunctionVec, const BYTE* resolved_address) {
+        for (const BYTE* stored_func_address : NewFunctionVec)
+            if (stored_func_address == resolved_address) 
+                return;
 
-		if (!was_added)
-			NewFunctionVec.emplace_back(resolved_address);
+        NewFunctionVec.emplace_back(resolved_address);
 	}
 };
 
@@ -106,17 +104,17 @@ enum AddBlock: BYTE {
 };
 
 struct FunctionTreeTraceCtx {
-	std::map<BYTE*, Block*>& rootsMap;
+	std::map<const BYTE*, Block*>& rootsMap;
 	Block&				     currentBlock;
 	std::vector<DWORD>&		 explorationVec;
 	
 };
 
 struct ConditionalJumpCtx {
-	LPBYTE  shallowPtr,
-	        deepPtr;
-	DWORD	shallowIdx,
-			deepIdx;
+    const BYTE* shallow_ptr,
+              * deep_ptr;
+	DWORD	    shallowIdx,
+			    deepIdx;
 };
 namespace fnt {
 	enum ErrorCode: BYTE {
@@ -126,26 +124,26 @@ namespace fnt {
 }
 
 struct FunctionTree {
-	LPBYTE                        const root;
+    const BYTE*                         root;
 	std::vector<std::unique_ptr<Block>> blocksVec;
-	std::vector<BYTE*>					newFunctionsVec;
+	std::vector<const BYTE*>			newFunctionsVec;
 	std::vector<DWORD>					leavesVec;
-
+    
 	FunctionTree(LPVOID lpFunctionRoot): root(static_cast<BYTE*>(lpFunctionRoot)), blocksVec(1), newFunctionsVec(NEW_FUNCTIONS_BASE_SIZE), leavesVec(0) {
-		blocksVec[0] = std::make_unique<Block>(root, 0xFFFFFFFF, 0, 0);
+	    blocksVec[0] = std::make_unique<Block>(root, 0xFFFFFFFF, 0, 0);
 	}
 
 	fnt::ErrorCode trace();
 
-	inline BOOLEAN splitBlock(Block& BlockToSplit, LPBYTE splitting_address, std::map<BYTE*, Block*>& RootsMap);
+	inline BOOLEAN splitBlock(Block& BlockToSplit, const BYTE* splitting_address, std::map<const BYTE*, Block*>& RootsMap);
 
-	AddBlock addBlock(LPBYTE address_to_add, DWORD index, DWORD parent_index, DWORD height, std::map<BYTE*, Block*>& RootsMap);
+	AddBlock addBlock(const BYTE *address_to_add, DWORD index, DWORD parent_index, DWORD height, std::map<const BYTE*, Block*>& RootsMap);
 
 	void transferUniqueChildren(Block& OldParent, Block& NewParent) const;
 
-	inline BOOLEAN checkIfTraced(Block& JustTracedBlock, std::map<BYTE*, Block*>& RootsMap) const;
+	inline BOOLEAN checkIfTraced(Block& JustTracedBlock, std::map<const BYTE*, Block*>& RootsMap) const;
 
-	void handleJump(BYTE* resolved_address, DWORD new_block_idx, const FunctionTreeTraceCtx& TraceContext);
+	void handleJump(const BYTE* resolved_address, DWORD new_block_idx, const FunctionTreeTraceCtx& TraceContext);
 
 	void print() const {
 		for (auto& block: blocksVec) {

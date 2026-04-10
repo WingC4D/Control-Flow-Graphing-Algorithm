@@ -1,13 +1,17 @@
 #include "..\Headers\main.h"
-
+//IMAGE_NT_HEADERS64
 int main() {
-	HMODULE hModule;
+    HMODULE hModule;
 	LPVOID target_function;
-	if (!(hModule = GetModuleHandleA("KernelBase.dll")))
+    if (!(hModule = GetModuleHandleW(L"KernelBase.dll")))
 		return 1;
-	if (!(target_function = reinterpret_cast<void*>(GetProcAddress(hModule, "CreateProcessInternalW"))))
+    //printf("Hello World! x%s", hModule);
+    //std::cout << "Hello World! " << hModule << std::endl;
+
+    if (!(target_function = reinterpret_cast<void*>(GetProcAddress(hModule, "CreateProcessInternalW"))))
 		return 2;
-	FunctionTree FuncTreeW(reinterpret_cast<void*>(&CreateFileW)), FuncTree(target_function);
+	FunctionTree FuncTreeW(reinterpret_cast<void*>(&CreateFileW)),
+                 FuncTree(target_function);
 	FuncTree.trace()  == fnt::success ? FuncTree.print() : std::println("[x] Analysis Failed!");
 	FuncTreeW.trace() == fnt::success ? FuncTreeW.print() : std::println("[x] Analysis Failed!");
 	std::cin.get();
