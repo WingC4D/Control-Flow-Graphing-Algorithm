@@ -331,12 +331,12 @@ const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using en
         case jump:
         case call:
             return analysis_address + length + *reinterpret_cast<const int* const>(analysis_address + getPreDisposition());
-
+        case jump | conditional | indirect:
         case jump | _short:
         case jump | conditional:
             return analysis_address + length + *reinterpret_cast<const signed char* const>(analysis_address + getPreDisposition());
 
-        case jump | conditional | indirect:
+
         case indirect_call:
         case indirect_jump:
             return *reinterpret_cast<const BYTE * const *>(analysis_address + length + *reinterpret_cast<const int * const>(analysis_address + getPreDisposition()));
