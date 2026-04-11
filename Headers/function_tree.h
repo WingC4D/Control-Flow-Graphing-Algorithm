@@ -21,25 +21,6 @@ struct ConditionalJumpCtx {
               * deep_ptr;
 	DWORD	    shallowIdx,
 			    deepIdx;
-    /*
-    ConditionalJumpCtx(const BYTE* resolved_jump, const BYTE* next_instruction, DWORD blocks_count) {
-        shallowIdx = blocks_count | COND_MASK;
-        deepIdx    = 1 + (blocks_count | COND_MASK);
-
-        if (resolved_jump < next_instruction)  {
-            shallow_ptr = resolved_jump;
-            shallowIdx |= COND_TAKEN_MASK;
-            deep_ptr    = next_instruction;
-        }
-
-        else  {
-            deep_ptr    = resolved_jump;
-            deepIdx    |= COND_TAKEN_MASK;
-            shallow_ptr = next_instruction;
-            
-        }
-    }
-    */
 };
 namespace fnt {
 	enum ErrorCode: BYTE {
@@ -49,20 +30,21 @@ namespace fnt {
 }
 
 struct FunctionTree {
-    const BYTE*                         root;
-	std::vector<Block>                  blocksVec;
-	std::vector<const BYTE*>			newFunctionsVec;
-	std::vector<DWORD>					leavesVec;
+    const BYTE*              root;
+	std::vector<Block>       blocksVec;
+	std::vector<const BYTE*> newFunctionsVec;
+	std::vector<DWORD>		 leavesVec;
 
     struct TraceContext {
-        std::map<const BYTE*, Block*> rootsMap;
-        Block*                        currentBlock;
-        std::vector<DWORD>            explorationVec;
-        DWORD                         blocksCount;
+        std::map<const BYTE*, DWORD> rootsMap;
+        ;
+        std::vector<DWORD>           explorationVec;
+        DWORD                        blocksCount,
+                                     currentIdx;
 
-        TraceContext(const BYTE* root_address, Block* root_block_ptr) : rootsMap(std::map{ std::pair{root_address, root_block_ptr} }), explorationVec(1) {
+        TraceContext(const BYTE* root_address) : rootsMap(std::map{ std::pair{ root_address, static_cast<DWORD>(0) } }), explorationVec(1) {
             explorationVec.reserve(BASE_BLOCK_RESERVE_SIZE);
-            currentBlock = root_block_ptr;
+            currentIdx   = 0;
             blocksCount  = 1;
         }
     };
@@ -74,15 +56,15 @@ struct FunctionTree {
 
 	fnt::ErrorCode trace();
 
-    BOOLEAN splitBlock(Block& BlockToSplit, const BYTE* splitting_address, std::map<const BYTE*, Block*>& RootsMap);
+    BOOLEAN splitBlock(Block& BlockToSplit, const BYTE* splitting_address, std::map<const BYTE*, DWORD>& RootsMap);
 
 	AddBlock addBlock(const BYTE *address_to_add, DWORD index, TraceContext& Context);
 
-	void transferUniqueChildren(Block& OldParent, Block* NewParent);
+	void transferUniqueChildren(Block& OldParent, DWORD NewParentIdx);
 
 	inline BOOLEAN checkIfTraced(TraceContext& Context);
 
-	void handleJump(const BYTE* resolved_address, DWORD new_block_idx, TraceContext& TraceContext);
+	void handleJump(const BYTE* resolved_address, DWORD new_block_idx, TraceContext& Context);
 
 	void print() const {
 		for (auto& block: blocksVec) {

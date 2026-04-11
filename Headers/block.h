@@ -94,9 +94,7 @@ struct Block {
         return ldeState->contextsArray.back().resolveJump(landmarksPtr->end);
     }
 
-    inline void resize(BYTE new_instruction_count, const BYTE* new_end_address) const;
-
-    void handleEndOfTrace(const BYTE* current_address, LdeState& State);
+    inline void resize(BYTE new_instruction_count, const BYTE* new_end_address, DWORD new_size) const;
 
     static void addResolvedCall(std::vector<const BYTE*>& NewFunctionVec, const BYTE* resolved_address) {
         for (const BYTE* stored_func_address : NewFunctionVec)

@@ -79,7 +79,7 @@ void Block::findNewEnd(const BYTE* interlacing_root_ptr) const {
     for (BYTE last_instruction_length = 0, new_instruction_count = 0; inst::Context& InstructionCtx: ldeState->contextsArray) {
         if (landmarksPtr->root + accumulated_length == interlacing_root_ptr) {
             if (new_instruction_count)
-                resize(new_instruction_count, interlacing_root_ptr - last_instruction_length);
+                resize(new_instruction_count, interlacing_root_ptr - last_instruction_length, accumulated_length);
             return;
         }
         last_instruction_length = InstructionCtx.getLength();
@@ -88,10 +88,11 @@ void Block::findNewEnd(const BYTE* interlacing_root_ptr) const {
     }
 }
 
-void Block::resize(const BYTE new_instruction_count, const BYTE* new_end_address) const {
+void Block::resize(const BYTE new_instruction_count, const BYTE* new_end_address, DWORD new_size) const {
     if (!new_instruction_count || !new_end_address)
         return;
     landmarksPtr->end           = const_cast<BYTE*>(new_end_address);
+    ldeState->size              = new_size;
     ldeState->instruction_count = new_instruction_count;
     ldeState->contextsArray.resize(new_instruction_count);
 }
