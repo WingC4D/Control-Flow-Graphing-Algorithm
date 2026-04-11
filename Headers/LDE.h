@@ -1,7 +1,8 @@
 #pragma once
 #include <Windows.h>
+#include <vector>
+#include <print>
 #include "Context.h"
-#include "FunctionTree.h"
 #ifndef hUINT
 	#ifdef _M_IX86
 		typedef unsigned long	   hUINT
@@ -13,11 +14,10 @@
 		#define   hUINT
 	#endif
 #endif
+struct FunctionTree;
+struct Block;
+struct LdeCommon;
 
-
-class FunctionTree;
-class Block;
-interface LdeCommon;
 constexpr BYTE SIZE_OF_BYTE				= 0x01,
                SIZE_OF_WORD				= 0x02,
                SIZE_OF_DWORD			= 0x04,
@@ -37,23 +37,19 @@ constexpr BYTE SIZE_OF_BYTE				= 0x01,
                CALLS_MASK				= 0x40,
                CONDITIONALS_MASK		= 0x80,
                DISPOSITIONS_MASK		= 0x30,
-               BLOCK_MAX_INSTRUCTIONS	= 0xA0;
+               BLOCK_MAX_INSTRUCTIONS = 0xA0;;
 
 
 enum Register: BYTE {
 	ax, bx, cx, dx,sp, bp, si, di
 };
-/*
-enum LdeStatus: BYTE {
-	success,
-	no_input,
-	wrong_input,
-	reached_end_of_function,
-	reached_end_of_branch,
-	reached_uninitialized_memory
+namespace block {
+    enum TraceResults : BYTE;
 
-};
-*/
+}
+
+
+
 namespace opcodes {
 	constexpr BYTE RETURN = 0xC3,
 				   JUMP	  = 0xE9,
@@ -61,9 +57,6 @@ namespace opcodes {
 }
 
 
-namespace blk {
-    enum TraceResults : BYTE;
-}
 
 
 struct LdeCommon { using enum inst::Context::Status;
@@ -74,6 +67,8 @@ struct LdeCommon { using enum inst::Context::Status;
 };
 
 struct LdeHookingState: LdeCommon {
+    
+
 	const BYTE*   functionAddress;
 	BYTE		  rip_indexes_count = 0,
 				  ripRelativeIndexesArray[RELATIVE_TRAMPOLINE_SIZE]{};
@@ -99,7 +94,6 @@ struct LdeHookingState: LdeCommon {
 		instruction_count = 0;
 	}
 };
-
 struct LdeState: LdeCommon {
 	std::vector<inst::Context> contextsArray;
 
@@ -117,10 +111,10 @@ struct LdeState: LdeCommon {
         contextsArray.resize(instruction_count);
 	}
 
-    blk::TraceResults traceBlock(const BYTE* block_root, std::vector<const BYTE *>& NewFunctionsVec);
+    block::TraceResults traceBlock(const BYTE* block_root, std::vector<const BYTE*>& NewFunctionsVec);
 
-    DWORD getLastInstHeadOffset() {
-        return size - (--contextsArray.end())->getLength();
+    DWORD getLastInstHeadOffset() const {
+        return size - contextsArray.back().getLength();
     }
 
     const BYTE *resolveJumpLastInstruction(const BYTE * const last_instruction_head) {
@@ -129,7 +123,7 @@ struct LdeState: LdeCommon {
 };
 
 struct LdeJumpResolutionState: LdeCommon {
-	LPVOID toResolve;
+	LPVOID        toResolve;
 	inst::Context contextsArray[1]{};
 
 	LdeJumpResolutionState(LPVOID lpTarget): toResolve(lpTarget) {}
@@ -139,8 +133,8 @@ struct LdeJumpResolutionState: LdeCommon {
 	}
 
 	void prepareForNextStep() {
-		contextsArray[0] = currContext;
-		currContext		 = inst::Context{};
+		contextsArray[0]  = currContext;
+		currContext		  = inst::Context{};
 		instruction_count = 1;
 	}
 };
@@ -151,9 +145,11 @@ enum state: BYTE {
 	branch_is_obfuscated
 };
 
-namespace blk {
+namespace block {
     enum TraceResults : BYTE;
 }
+
+
 
 class Lde {
     friend FunctionTree; friend  Block; friend inst::Context; friend LdeState;
@@ -164,8 +160,8 @@ class Lde {
 
 	static LPBYTE resolveJump(LPBYTE address_to_resolve) ;
 
-	static blk::TraceResults checkForNewBlock(inst::Context& InstructionContext, const BYTE* lpReference);
-
+    static block::TraceResults checkForNewBlock(inst::Context& InstructionContext, const BYTE* lpReference);
+    
 	[[nodiscard]] static BYTE mapInstructionLength(const BYTE *analysis_address, inst::Context& InstructionContext, inst::Context::Status& status);
 
 	enum first_byte_traits: BYTE {

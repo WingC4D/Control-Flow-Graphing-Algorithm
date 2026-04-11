@@ -9,7 +9,8 @@ Context::Status Context::map(const BYTE * const analysis_address) { using enum L
 
     if (!setLength(getPreDisposition()))
         return instruction_overflow;
-
+    if (reinterpret_cast<unsigned long long>(analysis_address) == 0X7FFA204DE878)
+        std::println();
     switch (Lde::results[*analysis_address]) {
         case none:
             return *analysis_address == opcodes::RETURN || *analysis_address == 0xC2 ? reached_end_of_function : success;
@@ -344,4 +345,33 @@ const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using en
             return nullptr;
     }
     
+}
+
+block::TraceResults Context::checkForNewBlock(const BYTE* lpReference) {
+    using enum opcodes::types; using enum block::TraceResults;
+    if (!lpReference)
+        return failed;
+
+    switch (Lde::analyseOpcodeType(lpReference, *this)) {
+        case conditional |  jump:
+            return reachedConditionalJump;
+
+        case jump:
+        case _short | jump:
+        case indirect_jump:
+        case indirect_far_jump:
+            return reachedJump;
+
+        case call:
+        case indirect_call:
+        case indirect_far_call:
+            return reachedCall;
+
+        case ret:
+        case ret | _far:
+            return reachedReturn;
+
+        default:
+            return noNewBlock;
+    }
 }

@@ -1,5 +1,5 @@
 #include "Lde.h"
-
+#include <iostream>
 BYTE Lde::mapInstructionLength(const BYTE* analysis_address, inst::Context& InstructionContext, inst::Context::Status& status) { //Main instruction decoding dispatcher
     using enum inst::Context::Status;
     if (!analysis_address) {
@@ -694,7 +694,36 @@ WORD Lde::analyseOpcodeType(const BYTE* candidate_addr, _Inout_ inst::Context& I
 			return (*candidate_addr & 0xF0) == 0x70 || (*candidate_addr & 0xFC) == 0xE0 ? conditional | _short | jump : unknown;
 	}
 }
+block::TraceResults Lde::checkForNewBlock(inst::Context& InstructionContext, const BYTE* lpReference) {
+    using inst::opcodes::types;
+    using enum block::TraceResults;
+    if (!lpReference)
+        return failed;
 
+    switch (analyseOpcodeType(lpReference, InstructionContext)) {
+    case conditional | _near | jump:
+    case conditional | _short | jump:
+        return reachedConditionalJump;
+
+    case indirect_far_jump:
+    case indirect_jump:
+    case jump:
+    case _short | jump:
+        return reachedJump;
+
+    case indirect_far_call:
+    case indirect_call:
+    case call:
+        return reachedCall;
+
+    case ret:
+    case ret | _far:
+        return reachedReturn;
+
+    default:
+        return noNewBlock;
+    }
+}
 BOOLEAN Lde::isCurrentInstructionShortened(const BYTE prefix_count, const BYTE* reference_address) {
 	for (BYTE i = 0; i < prefix_count; i++) 
 		if (reference_address[-i] == 0x66) 
@@ -702,34 +731,6 @@ BOOLEAN Lde::isCurrentInstructionShortened(const BYTE prefix_count, const BYTE* 
 	return false;
 }
 
-blk::TraceResults Lde::checkForNewBlock(inst::Context& InstructionContext, const BYTE* lpReference) {
-	using enum blk::TraceResults;
-	if (!lpReference)
-		return failed;
-	switch (analyseOpcodeType(lpReference, InstructionContext)) {
-		case conditional | _near | jump:
-		case conditional | _short | jump:
-			return reachedConditionalJump;
-
-		case indirect_far_jump:
-		case indirect_jump:
-		case jump:
-		case _short | jump:
-			return reachedJump;
-
-		case indirect_far_call:
-		case indirect_call:
-		case call:
-			return reachedCall;
-
-		case ret:
-		case ret | _far:
-			return reachedReturn;
-
-		default:
-			return noNewBlock;
-	}
-}
 
 BOOLEAN Lde::traceIntoIAT(LdeHookingState& State) {
 	switch (analyseOpcodeType(State.functionAddress, State.currContext)) {
@@ -749,8 +750,14 @@ BOOLEAN Lde::traceIntoIAT(LdeHookingState& State) {
 			return false;
 	}
 }
+void addResolvedCall(std::vector<const BYTE*>& NewFunctionVec, const BYTE* resolved_address) {
+    for (const BYTE* stored_func_address : NewFunctionVec)
+        if (stored_func_address == resolved_address)
+            return;
 
-blk::TraceResults LdeState::traceBlock(const BYTE* const block_root, std::vector<const BYTE*>& NewFunctionsVec) {using enum blk::TraceResults;
+    NewFunctionVec.emplace_back(resolved_address);
+}
+block::TraceResults LdeState::traceBlock(const BYTE* const block_root, std::vector<const BYTE*>& NewFunctionsVec) {using enum block::TraceResults;
     while (instruction_count < BLOCK_MAX_INSTRUCTIONS && status == success) {
         status = currContext.map(block_root + size);
         switch (Lde::checkForNewBlock(currContext, block_root + size)) {
@@ -767,11 +774,11 @@ blk::TraceResults LdeState::traceBlock(const BYTE* const block_root, std::vector
                 return reachedReturn;
 
             case reachedCall:
-                Block::addResolvedCall(NewFunctionsVec, currContext.resolveJump(block_root + size));
+                addResolvedCall(NewFunctionsVec, currContext.resolveJump(block_root + size));
 
             case noNewBlock:
                 break;
-
+            
             case failed:
                 return failed;
         }

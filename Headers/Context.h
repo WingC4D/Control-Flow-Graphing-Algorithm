@@ -9,6 +9,16 @@
 typedef unsigned long  long QWORD;
 
 enum LdeStatus: BYTE;
+namespace block {
+    enum TraceResults : BYTE {
+        noNewBlock,
+        reachedReturn,
+        reachedConditionalJump,
+        reachedJump,
+        reachedCall,
+        failed
+    };
+}
 
 namespace inst {
     namespace opcodes {
@@ -183,6 +193,8 @@ namespace inst {
             *reinterpret_cast<WORD*>(this) = 0;
         }
 
+        block::TraceResults checkForNewBlock(const BYTE* lpReference);
+
     private:
         WORD   opcode_length : 2 = 0,
                length        : 4 = 0,
@@ -218,7 +230,7 @@ namespace inst {
 
             return success;
         }
-
+        
     protected:
         WORD reserved : 2 = 0;
 	};
