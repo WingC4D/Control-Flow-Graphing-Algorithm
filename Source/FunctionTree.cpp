@@ -9,7 +9,9 @@ fnt::ErrorCode FunctionTree::trace() { using enum block::TraceResults;
 
         if (blocksVec[Context.currentIdx].landmarksPtr->end)
             continue;
-       auto result = blocksVec[Context.currentIdx].trace(newFunctionsVec);
+
+        block::TraceResults result = blocksVec[Context.currentIdx].trace(newFunctionsVec);
+
         if (checkIfTraced(Context))
             continue;
 
