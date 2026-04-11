@@ -1,17 +1,16 @@
-#include "Context.h"
-#include "Lde.h"
+#include "instruction_ctx.h"
+
 using namespace inst;
 
 //Main instruction decoding dispatcher.
-Context::Status Context::map(const BYTE * const analysis_address) { using enum Lde::first_byte_traits; using enum Status;
+Context::Status Context::map(const BYTE * const analysis_address) { using enum first_byte_traits; using enum Status;
     if (!analysis_address)
         return no_input;
 
     if (!setLength(getPreDisposition()))
         return instruction_overflow;
-    if (reinterpret_cast<unsigned long long>(analysis_address) == 0X7FFA204DE878)
-        std::println();
-    switch (Lde::results[*analysis_address]) {
+
+    switch (results[*analysis_address]) {
         case none:
             return *analysis_address == opcodes::RETURN || *analysis_address == 0xC2 ? reached_end_of_function : success;
 
@@ -91,7 +90,7 @@ Context::Status Context::map(const BYTE * const analysis_address) { using enum L
     }
 }
 
-Context::Status Context::analyseModRM(const BYTE* const preceding_byte_ptr) {
+Context::Status Context::analyseModRM(const BYTE* const preceding_byte_ptr) { using namespace mod_rm;
     if (!preceding_byte_ptr) 
         return no_input;
 
@@ -118,7 +117,7 @@ Context::Status Context::analyseModRM(const BYTE* const preceding_byte_ptr) {
             return incrementLength() ? success : instruction_overflow;
 
         default:
-            if ((preceding_byte_ptr[1] & mod_rm::RM_MASK) == 4) {
+            if ((preceding_byte_ptr[1] & RM_MASK) == 4) {
                 has_SIB = true;
                 return increaseLength(analyseSibBase(preceding_byte_ptr) ? SIZE_OF_BYTE + SIZE_OF_DWORD : SIZE_OF_BYTE) ? success : instruction_overflow;
             }
@@ -194,7 +193,7 @@ Context::Status Context::analyseGroup3(const BYTE* const analysis_address) {
     }
 }
 
-Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) {
+Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) { using namespace mod_rm;
     switch (preceding_byte_ptr[1] & MOD_MASK) {
         case 0xC0:
             return analyseRegBits(preceding_byte_ptr, SIZE_OF_BYTE);
@@ -229,7 +228,7 @@ Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) {
     }
 }
 
-Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) {
+Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using namespace mod_rm;
     switch (preceding_byte_ptr[1] & MOD_MASK) {
         case 0xC0:
             return analyseRegBits(preceding_byte_ptr, SIZE_OF_BYTE);
@@ -260,8 +259,8 @@ Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) {
     }
 }
 
-WORD Context::analyseOpcodeType(_In_ const BYTE * const candidate_addr) { using namespace opcodes;
-    switch (*candidate_addr) {
+WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using namespace opcodes;
+    switch (*analysis_address) {
         case 0xC2:
             return ret | _far;
 
@@ -281,7 +280,7 @@ WORD Context::analyseOpcodeType(_In_ const BYTE * const candidate_addr) { using 
             return jump | _short;
 
         case 0x0F:
-            switch (candidate_addr[1]) {
+            switch (analysis_address[1]) {
                 case 0x05:
                     return sys_call;
 
@@ -296,12 +295,12 @@ WORD Context::analyseOpcodeType(_In_ const BYTE * const candidate_addr) { using 
 
                 default:
                     rip_relative = true;
-                    return (candidate_addr[1] & 0xF0) == 0x80 ? conditional | jump : unknown;
+                    return (analysis_address[1] & 0xF0) == 0x80 ? indirect | conditional | jump : unknown;
             }
 
         case 0xFF:
             rip_relative = true;
-            switch ((candidate_addr[1] & REG_MASK) >> 3) {
+            switch ((analysis_address[1] & mod_rm::REG_MASK) >> 3) {
                 case 0:
                     return indirect_inc;
                 case 1:
@@ -321,7 +320,7 @@ WORD Context::analyseOpcodeType(_In_ const BYTE * const candidate_addr) { using 
                     return unknown;
             }
         default:
-            if ((*candidate_addr & 0xF0) == 0x70 || (*candidate_addr & 0xFC) == 0xE0)
+            if ((*analysis_address & 0xF0) == 0x70 || (*analysis_address & 0xFC) == 0xE0)
                 return conditional | jump;
         return unknown;
     }
@@ -337,6 +336,7 @@ const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using en
         case jump | conditional:
             return analysis_address + length + *reinterpret_cast<const signed char* const>(analysis_address + getPreDisposition());
 
+        case jump | conditional | indirect:
         case indirect_call:
         case indirect_jump:
             return *reinterpret_cast<const BYTE * const *>(analysis_address + length + *reinterpret_cast<const int * const>(analysis_address + getPreDisposition()));
@@ -344,7 +344,6 @@ const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using en
         default:
             return nullptr;
     }
-    
 }
 
 block::TraceResults Context::checkForNewBlock(const BYTE* lpReference) {
@@ -352,7 +351,8 @@ block::TraceResults Context::checkForNewBlock(const BYTE* lpReference) {
     if (!lpReference)
         return failed;
 
-    switch (Lde::analyseOpcodeType(lpReference, *this)) {
+    switch (analyseOpcodeType(lpReference)) {
+
         case conditional |  jump:
             return reachedConditionalJump;
 
@@ -374,4 +374,11 @@ block::TraceResults Context::checkForNewBlock(const BYTE* lpReference) {
         default:
             return noNewBlock;
     }
+}
+
+void Context::log_addr_idx(const BYTE *instruction_head, DWORD idx) const {
+    std::print("#{:3d} @{:P} ", idx, reinterpret_cast<const void*>(instruction_head));
+    for (BYTE i = 0, instruction_length = length; i < instruction_length; i++)
+        std::print("{:#04X} ", instruction_head[i]);
+    std::println();
 }

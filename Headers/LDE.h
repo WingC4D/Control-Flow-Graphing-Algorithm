@@ -1,8 +1,7 @@
 #pragma once
-#include <Windows.h>
 #include <vector>
 #include <print>
-#include "Context.h"
+#include "lde_common.h"
 #ifndef hUINT
 	#ifdef _M_IX86
 		typedef unsigned long	   hUINT
@@ -36,8 +35,7 @@ constexpr BYTE SIZE_OF_BYTE				= 0x01,
                IMM32_MASK				= 0x20,
                CALLS_MASK				= 0x40,
                CONDITIONALS_MASK		= 0x80,
-               DISPOSITIONS_MASK		= 0x30,
-               BLOCK_MAX_INSTRUCTIONS = 0xA0;;
+               DISPOSITIONS_MASK		= 0x30;
 
 
 enum Register: BYTE {
@@ -57,18 +55,7 @@ namespace opcodes {
 }
 
 
-
-
-struct LdeCommon { using enum inst::Context::Status;
-    inst::Context         currContext;
-	inst::Context::Status status            = success;
-	BYTE                  instruction_count = 0;
-    DWORD                 size              = 0;
-};
-
 struct LdeHookingState: LdeCommon {
-    
-
 	const BYTE*   functionAddress;
 	BYTE		  rip_indexes_count = 0,
 				  ripRelativeIndexesArray[RELATIVE_TRAMPOLINE_SIZE]{};
@@ -94,33 +81,7 @@ struct LdeHookingState: LdeCommon {
 		instruction_count = 0;
 	}
 };
-struct LdeState: LdeCommon {
-	std::vector<inst::Context> contextsArray;
 
-	LdeState(): contextsArray(BLOCK_MAX_INSTRUCTIONS) {}
-
-	void prepareNextStep() {
-        size                            += currContext.getLength();
-        contextsArray[instruction_count] = currContext;
-        currContext.clear();
-        instruction_count++;
-	}
-
-    void handleEnfOfTrace() {
-        prepareNextStep();
-        contextsArray.resize(instruction_count);
-	}
-
-    block::TraceResults traceBlock(const BYTE* block_root, std::vector<const BYTE*>& NewFunctionsVec);
-
-    DWORD getLastInstHeadOffset() const {
-        return size - contextsArray.back().getLength();
-    }
-
-    const BYTE *resolveJumpLastInstruction(const BYTE * const last_instruction_head) {
-        return contextsArray.back().resolveJump(last_instruction_head);
-    }
-};
 
 struct LdeJumpResolutionState: LdeCommon {
 	LPVOID        toResolve;
@@ -145,14 +106,8 @@ enum state: BYTE {
 	branch_is_obfuscated
 };
 
-namespace block {
-    enum TraceResults : BYTE;
-}
-
-
-
 class Lde {
-    friend FunctionTree; friend  Block; friend inst::Context; friend LdeState;
+    friend FunctionTree; friend  Block; friend inst::Context;
 
 	static BYTE getValidInstructionsSizeHook(_Inout_ const void*& target_address, _Out_ LdeHookingState& State);
 

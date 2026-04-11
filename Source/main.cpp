@@ -1,4 +1,6 @@
-#include "..\Headers\main.h"
+#include "main.h"
+#include <iostream>
+
 //IMAGE_NT_HEADERS64
 int main() {
     HMODULE hModule;

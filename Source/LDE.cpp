@@ -696,7 +696,7 @@ WORD Lde::analyseOpcodeType(const BYTE* candidate_addr, _Inout_ inst::Context& I
 }
 block::TraceResults Lde::checkForNewBlock(inst::Context& InstructionContext, const BYTE* lpReference) {
     using inst::opcodes::types;
-    using enum block::TraceResults;
+    using enum Block::TraceResults;
     if (!lpReference)
         return failed;
 
