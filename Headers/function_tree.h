@@ -22,6 +22,11 @@ struct ConditionalJumpCtx {
 	DWORD	    shallowIdx,
 			    deepIdx;
 };
+
+namespace block {
+    enum TraceResults: BYTE;
+}
+
 namespace fnt {
 	enum ErrorCode: BYTE {
 		success,
@@ -40,11 +45,14 @@ struct FunctionTree {
         std::vector<DWORD>           explorationVec;
         DWORD                        blocksCount,
                                      currentIdx;
+        block::TraceResults          result;
+        
 
         TraceContext(const BYTE* root_address) : rootsMap(std::map{ std::pair{ root_address, static_cast<DWORD>(0) } }), explorationVec(1) {
             explorationVec.reserve(BASE_BLOCK_RESERVE_SIZE);
             currentIdx   = 0;
             blocksCount  = 1;
+            result       = block::TraceResults::noNewBlock;
         }
     };
 

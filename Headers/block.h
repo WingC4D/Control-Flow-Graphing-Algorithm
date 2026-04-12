@@ -19,9 +19,9 @@ namespace block {
 
 struct BlockLandmarks {
     const BYTE* const root,
-        * end;
+              *       end;
 
-    BlockLandmarks(const BYTE* const root_address, const BYTE* end_address = nullptr) : root(root_address) {
+    BlockLandmarks(const BYTE* const root_address, const BYTE* const end_address = nullptr) : root(root_address) {
         end = end_address;
     }
 };

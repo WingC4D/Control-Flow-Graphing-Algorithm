@@ -43,6 +43,12 @@ namespace inst {
 		imm_eight_bytes = 0x80
 	};
 
+    namespace prefixes {
+        constexpr BYTE REX_BASE = 0x48,
+                       SHORT    = 0x66,
+                       REX_MASK = 0xF8;
+    }
+
     namespace opcodes {
         enum types: WORD {
 	    	inc				  = 0x0000,
@@ -83,15 +89,21 @@ namespace inst {
 	    	unknown			  = 0xFFFF
 	    };
 
-        constexpr BYTE RETURN = 0xC3,
-                       JUMP   = 0xE9,
-                       CALL   = 0xE8;
+        constexpr BYTE CALL       = 0xE8,
+                       JUMP       = 0xE9,
+                       SHORT_JUMP = 0xEB,
+                       RETURN_FAR = 0xC2,
+                       RETURN     = 0xC3;
     }
 
     namespace mod_rm {
         constexpr BYTE RM_MASK  = 0x07,
                        REG_MASK = 0x38,
-                       MOD_MASK = 0xC0;
+                       MOD_MASK = 0xC0,
+                       MOD11    = 0xC0,
+                       MOD10    = 0x80,
+                       MOD01    = 0x40;
+
         enum Status: BYTE {
             success_stop,
             success_continue,
@@ -259,7 +271,7 @@ namespace inst {
 	};
 
 
-    inline BYTE results[256] {
+    static BYTE results[256] {
         has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm | prefix,
 		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
 		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,

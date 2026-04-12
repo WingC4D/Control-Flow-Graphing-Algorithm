@@ -2,17 +2,21 @@
 #include <iostream>
 
 int main() {
-    HMODULE hModule;
-	LPVOID target_function;
-    if (!(hModule = GetModuleHandleW(L"KernelBase.dll")))
+    HMODULE hModule = GetModuleHandleW(L"KernelBase.dll");
+
+    if (!hModule)
 		return 1;
 
-    if (!(target_function = reinterpret_cast<void*>(GetProcAddress(hModule, "CreateProcessInternalW"))))
+    LPVOID  target_function = reinterpret_cast<void*>(GetProcAddress(hModule, "CreateProcessInternalW");
+
+    if (!target_function)
 		return 2;
-	FunctionTree FuncTreeW(reinterpret_cast<void*>(&CreateFileW)),
-                 FuncTree(target_function);
-	FuncTree.trace()  == fnt::success ? FuncTree.print()  : std::println("[x] Analysis Failed!");
-	FuncTreeW.trace() == fnt::success ? FuncTreeW.print() : std::println("[x] Analysis Failed!");
-	std::cin.get();
+	
+    FunctionTree FuncTree0(reinterpret_cast<void*>(&CreateFileW)),
+                 FuncTree1(target_function);
+	FuncTree1.trace()  == fnt::success ? FuncTree1.print()  : std::println("[x] Analysis Failed!");
+	FuncTree0.trace() == fnt::success ? FuncTree0.print() : std::println("[x] Analysis Failed!");
+	
+    std::cin.get();
 	return 0;
 }

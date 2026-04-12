@@ -5,16 +5,16 @@ fnt::ErrorCode FunctionTree::trace() { using enum block::TraceResults;
     while (!Context.explorationVec.empty() && Context.blocksCount < block::MAX_INDEX) {
         Context.currentIdx  = Context.explorationVec.back();
         Context.explorationVec.pop_back();
-        Context.blocksCount = static_cast<DWORD>(blocksVec.size());
+
         if (blocksVec[Context.currentIdx].landmarksPtr->end)
             continue;
 
-        block::TraceResults result = blocksVec[Context.currentIdx].trace(newFunctionsVec);
+        Context.result = blocksVec[Context.currentIdx].trace(newFunctionsVec);
 
         if (checkIfTraced(Context))
             continue;
 
-        switch (result) {
+        switch (Context.result) {
             case reachedJump:
                 handleJump(blocksVec[Context.currentIdx].resolveEndAsJump(), Context.blocksCount, Context);
                 break;
@@ -83,7 +83,6 @@ AddBlock FunctionTree::addBlock(const BYTE* address_to_add, const DWORD index, T
             if (splitBlock(UpperBound->second, address_to_add, Context.rootsMap))
                 return split;
     }
-    Context.blocksCount++;
     blocksVec.emplace_back(address_to_add, Context.currentIdx, index, blocksVec[Context.currentIdx].height + 1);
     return added;
 }
@@ -93,10 +92,11 @@ void FunctionTree::handleJump(const BYTE* resolved_address, const DWORD new_bloc
         return;
 
     switch (addBlock(resolved_address, new_block_idx, Context)) {
-        case added: 
-            Context.rootsMap[resolved_address] = blocksVec[blocksVec.size() - 1].getIndex();
-            blocksVec[Context.currentIdx].flowToVec.emplace_back(blocksVec.size() - 1);
-            Context.explorationVec.emplace_back(blocksVec.size() - 1);
+        case added:
+            Context.rootsMap[resolved_address] = blocksVec[Context.blocksCount].getIndex();
+            blocksVec[Context.currentIdx].flowToVec.emplace_back(Context.blocksCount);
+            Context.explorationVec.emplace_back(Context.blocksCount);
+            Context.blocksCount++;
             break;
         
         case was_traced:
@@ -105,6 +105,7 @@ void FunctionTree::handleJump(const BYTE* resolved_address, const DWORD new_bloc
             break;
 
         case split:
+            Context.blocksCount++;
             break;
     }
 }

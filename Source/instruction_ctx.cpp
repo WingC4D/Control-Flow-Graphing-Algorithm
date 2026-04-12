@@ -12,7 +12,7 @@ Context::Status Context::map(const BYTE * const analysis_address) { using enum f
 
     switch (results[*analysis_address]) {
         case none:
-            return *analysis_address == opcodes::RETURN || *analysis_address == 0xC2 ? reached_end_of_function : success;
+            return *analysis_address == opcodes::RETURN || *analysis_address == opcodes::RETURN_FAR ? reached_end_of_function : success;
 
         case has_mod_rm:
             return analyseModRM(analysis_address);
@@ -76,10 +76,10 @@ Context::Status Context::map(const BYTE * const analysis_address) { using enum f
             if (!incrementLength()) 
                 return instruction_overflow;
             
-            if ((*analysis_address & 0xF8) == 0x48)
+            if ((*analysis_address & prefixes::REX_MASK) == prefixes::REX_BASE)
                 rex_w = true;
 
-            else if (!prefix_count && *analysis_address == 0x66)
+            else if (!prefix_count && *analysis_address == prefixes::SHORT)
                 shortened = true;
 
             return map(analysis_address + 1);
@@ -101,16 +101,16 @@ Context::Status Context::analyseModRM(const BYTE* const preceding_byte_ptr) { us
         return instruction_overflow;
 
     switch (preceding_byte_ptr[1] & MOD_MASK) {
-        case 0xC0:
+        case MOD11:
             return success;
 
-        case 0x80:
+        case MOD10:
             if (success != analyseRM4(preceding_byte_ptr, SIZE_OF_BYTE))
                 return instruction_overflow;
 
             return increaseLength(SIZE_OF_DWORD) ? success : instruction_overflow;
 
-        case 0x40:
+        case MOD01:
             if (success != analyseRM4(preceding_byte_ptr, SIZE_OF_BYTE))
                 return instruction_overflow;
 
@@ -179,8 +179,10 @@ Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_pt
 Context::Status Context::analyseGroup3(const BYTE* const analysis_address) {
     if (!incrementLength())
         return instruction_overflow;
+
     if (!incrementOpcode())
         return opcode_overflow;
+
     switch (*analysis_address) {
         case 0xF6:
             return analyseF6(analysis_address);
@@ -195,10 +197,10 @@ Context::Status Context::analyseGroup3(const BYTE* const analysis_address) {
 
 Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) { using namespace mod_rm;
     switch (preceding_byte_ptr[1] & MOD_MASK) {
-        case 0xC0:
+        case MOD11:
             return analyseRegBits(preceding_byte_ptr, SIZE_OF_BYTE);
 
-        case 0x80:
+        case MOD10:
             if (success != analyseRM4(preceding_byte_ptr, SIZE_OF_DWORD))
                 return instruction_overflow;
 
@@ -207,7 +209,7 @@ Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) { using
 
             return incrementLength() ? success : instruction_overflow;
 
-        case 0x40:
+        case MOD01:
             if (success != analyseRM4(preceding_byte_ptr, SIZE_OF_BYTE))
                 return instruction_overflow;
 
@@ -230,10 +232,10 @@ Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) { using
 
 Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using namespace mod_rm;
     switch (preceding_byte_ptr[1] & MOD_MASK) {
-        case 0xC0:
+        case MOD11:
             return analyseRegBits(preceding_byte_ptr, SIZE_OF_BYTE);
 
-        case 0x80:
+        case MOD10:
             if (!increaseLength(SIZE_OF_DWORD))
                 return instruction_overflow;
 
@@ -245,7 +247,7 @@ Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using
 
             return  success ;
 
-        case 0x40:
+        case MOD01:
             if (success != analyseRM4(preceding_byte_ptr, SIZE_OF_BYTE))
                 return instruction_overflow;
 
@@ -261,7 +263,7 @@ Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using
 
 WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using namespace opcodes;
     switch (*analysis_address) {
-        case 0xC2:
+        case RETURN_FAR:
             return ret | _far;
 
         case RETURN:
@@ -275,7 +277,7 @@ WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using nam
             rip_relative = true;
             return jump;
 
-        case 0xEB:
+        case SHORT_JUMP:
             rip_relative = true;
             return jump | _short;
 
@@ -331,12 +333,13 @@ const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using en
         case jump:
         case call:
             return analysis_address + length + *reinterpret_cast<const int* const>(analysis_address + getPreDisposition());
-        case jump | conditional | indirect:
+
         case jump | _short:
         case jump | conditional:
             return analysis_address + length + *reinterpret_cast<const signed char* const>(analysis_address + getPreDisposition());
 
 
+        case jump | conditional | indirect:
         case indirect_call:
         case indirect_jump:
             return *reinterpret_cast<const BYTE * const *>(analysis_address + length + *reinterpret_cast<const int * const>(analysis_address + getPreDisposition()));
