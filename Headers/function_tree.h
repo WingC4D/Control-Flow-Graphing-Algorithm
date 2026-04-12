@@ -37,7 +37,6 @@ struct FunctionTree {
 
     struct TraceContext {
         std::map<const BYTE*, DWORD> rootsMap;
-        ;
         std::vector<DWORD>           explorationVec;
         DWORD                        blocksCount,
                                      currentIdx;
@@ -56,11 +55,11 @@ struct FunctionTree {
 
 	fnt::ErrorCode trace();
 
-    BOOLEAN splitBlock(Block& BlockToSplit, const BYTE* splitting_address, std::map<const BYTE*, DWORD>& RootsMap);
+    BOOLEAN splitBlock(DWORD to_split_idx, const BYTE* splitting_address, std::map<const BYTE*, DWORD>& RootsMap);
 
 	AddBlock addBlock(const BYTE *address_to_add, DWORD index, TraceContext& Context);
 
-	void transferUniqueChildren(Block& OldParent, DWORD NewParentIdx);
+	void transferUniqueChildren(DWORD old_parent_idx, DWORD new_parent_idx);
 
 	inline BOOLEAN checkIfTraced(TraceContext& Context);
 

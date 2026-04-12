@@ -6,7 +6,6 @@ fnt::ErrorCode FunctionTree::trace() { using enum block::TraceResults;
         Context.currentIdx  = Context.explorationVec.back();
         Context.explorationVec.pop_back();
         Context.blocksCount = static_cast<DWORD>(blocksVec.size());
-
         if (blocksVec[Context.currentIdx].landmarksPtr->end)
             continue;
 
@@ -45,33 +44,28 @@ fnt::ErrorCode FunctionTree::trace() { using enum block::TraceResults;
     return fnt::success;
 }
 
-BOOLEAN FunctionTree::splitBlock(Block& BlockToSplit, const BYTE* splitting_address, std::map<const BYTE*, DWORD>& RootsMap) {
-#ifdef DEBUG
-    if (!BlockToSplit.isInRange(splitting_address))
-        return false;
-#endif
+BOOLEAN FunctionTree::splitBlock(DWORD to_split_idx, const BYTE* splitting_address, std::map<const BYTE*, DWORD>& RootsMap) {
     if (!splitting_address)
         return false;
     BYTE  iterated_count = 0,
-          original_count = BlockToSplit.ldeState->instruction_count,
+          original_count = blocksVec[to_split_idx].ldeState->instruction_count,
           new_count      = 0;
     for (DWORD new_index = static_cast<DWORD>(blocksVec.size()), last_instruction_length = 0, accumulated_length = 0;
-        inst::Context  Context : BlockToSplit.ldeState->contextsArray) {
-        if (BlockToSplit.landmarksPtr->root + accumulated_length != splitting_address || !iterated_count) {
+        inst::Context  Context : blocksVec[to_split_idx].ldeState->contextsArray) {
+        if (blocksVec[to_split_idx].landmarksPtr->root + accumulated_length != splitting_address || !iterated_count) {
             last_instruction_length = Context.getLength();
             accumulated_length += last_instruction_length;
             iterated_count++;
             continue;
         }
-        blocksVec.emplace_back(splitting_address, BlockToSplit.getIndex(), new_index, BlockToSplit.height + 1);
-        Block& NewBlock = blocksVec[new_index];
-
+        blocksVec.emplace_back(splitting_address, to_split_idx, new_index, blocksVec[to_split_idx].height + 1);
+        
         for (; iterated_count + new_count < original_count; new_count++)
-            NewBlock.ldeState->contextsArray[new_count] = BlockToSplit.ldeState->contextsArray[new_count + iterated_count];
+            blocksVec[new_index].ldeState->contextsArray[new_count] = blocksVec[to_split_idx].ldeState->contextsArray[new_count + iterated_count];
 
-        NewBlock.resize(new_count, BlockToSplit.landmarksPtr->end, BlockToSplit.ldeState->size - accumulated_length);
-        transferUniqueChildren(BlockToSplit, new_index);
-        BlockToSplit.resize(iterated_count, splitting_address - last_instruction_length, accumulated_length);
+        blocksVec[new_index].resize(new_count, blocksVec[to_split_idx].landmarksPtr->end, blocksVec[to_split_idx].ldeState->size - accumulated_length);
+        transferUniqueChildren(to_split_idx, new_index);
+        blocksVec[to_split_idx].resize(iterated_count, splitting_address - last_instruction_length, accumulated_length);
         RootsMap[splitting_address] = new_index;
         break;
     }
@@ -85,9 +79,8 @@ AddBlock FunctionTree::addBlock(const BYTE* address_to_add, const DWORD index, T
         return was_traced;
     auto UpperBound = Context.rootsMap.upper_bound(address_to_add);
     if (UpperBound != Context.rootsMap.begin()) {
-        Block& PrevBlock = blocksVec[(--UpperBound)->second];
-        if (PrevBlock.isInRange(address_to_add))
-            if (splitBlock(PrevBlock, address_to_add, Context.rootsMap))
+        if (blocksVec[(--UpperBound)->second].isInRange(address_to_add))
+            if (splitBlock(UpperBound->second, address_to_add, Context.rootsMap))
                 return split;
     }
     Context.blocksCount++;
@@ -107,7 +100,8 @@ void FunctionTree::handleJump(const BYTE* resolved_address, const DWORD new_bloc
             break;
         
         case was_traced:
-            blocksVec[Context.rootsMap.at(resolved_address)].flowFromVec.emplace_back(blocksVec[Context.currentIdx].getIndex());
+            blocksVec[Context.rootsMap.at(resolved_address)].flowFromVec.emplace_back(Context.currentIdx);
+            blocksVec[Context.currentIdx].flowToVec.emplace_back(Context.rootsMap.at(resolved_address));
             break;
 
         case split:
@@ -129,30 +123,30 @@ BOOLEAN FunctionTree::checkIfTraced(TraceContext& Context) {
         return false;
 
     blocksVec[Context.currentIdx].findNewEnd(blocksVec[NextBlockIterator->second].landmarksPtr->root);
-    transferUniqueChildren(blocksVec[Context.currentIdx], NextBlockIterator->second);
+    transferUniqueChildren(Context.currentIdx, NextBlockIterator->second);
     return true;
 }
 
-void FunctionTree::transferUniqueChildren(Block& OldParent, DWORD NewParentIdx) {
-    if (OldParent.flowToVec.empty()) {
-        OldParent.flowToVec.emplace_back(NewParentIdx);
-        blocksVec[NewParentIdx].flowFromVec.emplace_back(OldParent.getIndex());
+void FunctionTree::transferUniqueChildren(DWORD old_parent_idx, DWORD new_parent_idx) {
+    if (blocksVec[old_parent_idx].flowToVec.empty()) {
+        blocksVec[old_parent_idx].flowToVec.emplace_back(new_parent_idx);
+        blocksVec[new_parent_idx].flowFromVec.emplace_back(old_parent_idx);
         return;
     }
     BOOLEAN transferred_parent = false;
-    for (const DWORD child_idx : OldParent.flowToVec) {
+    for (const DWORD child_idx : blocksVec[old_parent_idx].flowToVec) {
         for (BYTE parentsVec_idx = 0; const DWORD parent_idx : blocksVec[child_idx].flowFromVec) {
-            if (parent_idx == OldParent.getIndex()) {
-                blocksVec[child_idx].flowFromVec[parentsVec_idx] = NewParentIdx;
+            if (parent_idx == old_parent_idx) {
+                blocksVec[child_idx].flowFromVec[parentsVec_idx] = new_parent_idx;
                 break;
             }
             parentsVec_idx++;
         }
         transferred_parent = true;
-        blocksVec[NewParentIdx].flowToVec.emplace_back(child_idx);
+        blocksVec[new_parent_idx].flowToVec.emplace_back(child_idx);
     }
     if (transferred_parent) {
-        OldParent.flowToVec.clear();
-        OldParent.flowToVec.emplace_back(NewParentIdx);
+        blocksVec[old_parent_idx].flowToVec.clear();
+        blocksVec[old_parent_idx].flowToVec.emplace_back(new_parent_idx);
     }
 }

@@ -58,7 +58,7 @@ struct Block {
     std::unique_ptr<BlockLandmarks>  landmarksPtr;
     DWORD                            idx;
     DWORD                            height;
-    std::unique_ptr<LdeState> ldeState;
+    std::unique_ptr<LdeState>        ldeState;
     std::vector<DWORD>               flowFromVec;
     std::vector<DWORD>               flowToVec;
 
