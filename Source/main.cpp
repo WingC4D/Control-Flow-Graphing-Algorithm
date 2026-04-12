@@ -7,7 +7,7 @@ int main() {
     if (!hModule)
 		return 1;
 
-    LPVOID  target_function = reinterpret_cast<void*>(GetProcAddress(hModule, "CreateProcessInternalW");
+    LPVOID  target_function = reinterpret_cast<void*>(GetProcAddress(hModule, "CreateProcessInternalW"));
 
     if (!target_function)
 		return 2;
