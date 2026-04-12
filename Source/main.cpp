@@ -14,7 +14,8 @@ int main() {
 	
     FunctionTree FuncTree0(reinterpret_cast<void*>(&CreateFileW)),
                  FuncTree1(target_function);
-	FuncTree1.trace()  == fnt::success ? FuncTree1.print()  : std::println("[x] Analysis Failed!");
+	
+    FuncTree1.trace() == fnt::success ? FuncTree1.print() : std::println("[x] Analysis Failed!");
 	FuncTree0.trace() == fnt::success ? FuncTree0.print() : std::println("[x] Analysis Failed!");
 	
     std::cin.get();

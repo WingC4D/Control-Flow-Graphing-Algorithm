@@ -69,9 +69,7 @@ BOOLEAN FunctionTree::splitBlock(DWORD to_split_idx, const BYTE* splitting_addre
         RootsMap[splitting_address] = new_index;
         break;
     }
-
     return iterated_count != original_count;
-
 }
 
 AddBlock FunctionTree::addBlock(const BYTE* address_to_add, const DWORD index, TraceContext& Context) {
@@ -109,8 +107,6 @@ void FunctionTree::handleJump(const BYTE* resolved_address, const DWORD new_bloc
             break;
     }
 }
-
-
 
 BOOLEAN FunctionTree::checkIfTraced(TraceContext& Context) {
     const auto NextBlockIterator = Context.rootsMap.upper_bound(blocksVec[Context.currentIdx].landmarksPtr->root);
