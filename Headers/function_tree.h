@@ -23,9 +23,9 @@ public:
         success,
         failed
     };
-    FunctionTree(LPVOID lpFunctionRoot) : root(static_cast<const BYTE*>(lpFunctionRoot)) {
+    FunctionTree(const VOID *lpFunctionRoot): root(static_cast<const BYTE*>(lpFunctionRoot)) {
         blocksVec.reserve(BASE_BLOCK_RESERVE_SIZE);
-        blocksVec.emplace_back(root, block::INVALID_INDEX, 0, 0);
+        blocksVec.emplace_back(root);
         newFunctionsVec.reserve(NEW_FUNCTIONS_BASE_SIZE);
     }
 
@@ -44,7 +44,6 @@ private:
 	std::vector<Block>       blocksVec;
 	std::vector<const BYTE*> newFunctionsVec;
 	std::vector<DWORD>		 leavesVec{};
-
     struct TraceContext {
         std::map<const BYTE*, DWORD> rootsMap;
         std::vector<DWORD>           explorationVec;
@@ -52,7 +51,7 @@ private:
                                      currIndex;
         block::TraceResults          result;
 
-        TraceContext(const BYTE* root_address) : rootsMap(std::map{ std::pair{ root_address, static_cast<DWORD>(0) } }), explorationVec(1) {
+        TraceContext(const BYTE* root_address): rootsMap(std::map{ std::pair{ root_address, static_cast<DWORD>(0) } }), explorationVec(1) {
             explorationVec.reserve(BASE_BLOCK_RESERVE_SIZE);
             currIndex    = 0;
             blocksCount  = 1;

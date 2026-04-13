@@ -4,16 +4,12 @@
 
 namespace block {
     constexpr BYTE  MAX_INSTRUCTIONS = 0xA0;
-
-    constexpr DWORD MAX_INDEX       = 0X3FFFFFFF,
-                    COND_MASK       = 0X80000000,
-                    COND_TAKEN_MASK = 0X40000000,
-                    INVALID_INDEX   = 0xFFFFFFFF;
+    constexpr DWORD MAX_INDEX        = 0X3FFFFFFF,
+                    COND_MASK        = 0X80000000,
+                    COND_TAKEN_MASK  = 0X40000000,
+                    INVALID_INDEX    = 0xFFFFFFFF;
 
     enum TraceResults : BYTE;
-
-    
-
 }
 
 struct Block {
@@ -53,7 +49,7 @@ struct Block {
     std::vector<DWORD>               flowFromVec{};
     std::vector<DWORD>               flowToVec{};
 
-    Block(const BYTE* root_address, DWORD parent_index, DWORD index, DWORD block_height) : root(root_address) {
+    Block(const BYTE* root_address, DWORD parent_index = block::INVALID_INDEX, DWORD index = 0, DWORD block_height = 0) : root(root_address) {
         if (parent_index != block::INVALID_INDEX)
             flowFromVec.emplace_back(parent_index);
         idx    = index;
