@@ -23,7 +23,7 @@ public:
         success,
         failed
     };
-    FunctionTree(LPVOID lpFunctionRoot) : root(static_cast<BYTE*>(lpFunctionRoot)) {
+    FunctionTree(LPVOID lpFunctionRoot) : root(static_cast<const BYTE*>(lpFunctionRoot)) {
         blocksVec.reserve(BASE_BLOCK_RESERVE_SIZE);
         blocksVec.emplace_back(root, block::INVALID_INDEX, 0, 0);
         newFunctionsVec.reserve(NEW_FUNCTIONS_BASE_SIZE);
@@ -32,7 +32,7 @@ public:
     ErrorCode trace();
 
     void print() const {
-        for (auto& block : blocksVec) {
+        for (const auto& block : blocksVec) {
             block.logIndex();
             block.logInstructionBytesAndAddresses();
             std::println();

@@ -94,6 +94,9 @@ FunctionTree::AddBlock FunctionTree::addBlock(const BYTE* address_to_add, const 
 }
 
 void FunctionTree::handleJump(const BYTE* resolved_address, const DWORD new_block_idx, TraceContext& Context) {
+    if (!resolved_address)
+        return;
+
     if (checkIfTraced(Context))
         return;
 

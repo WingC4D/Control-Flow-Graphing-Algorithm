@@ -3,7 +3,7 @@
 using namespace inst;
 
 //Main instruction decoding dispatcher.
-Context::Status Context::map(const BYTE * const analysis_address) { using enum first_byte_traits; using enum Status;
+Context::Status Context::map(const BYTE * const analysis_address) { using enum FirstByteTraits; using enum Status;
     if (!analysis_address)
         return no_input;
 
@@ -334,7 +334,7 @@ WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using nam
     }
 }
 
-const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using enum opcodes::types;
+const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using enum opcodes::Types;
     if (!analysis_address)
         return nullptr;
 
@@ -362,7 +362,7 @@ block::TraceResults Context::checkForNewBlock(const BYTE* lpReference) { using e
     if (!lpReference)
         return failed;
 
-    switch (analyseOpcodeType(lpReference)) { using enum opcodes::types;
+    switch (analyseOpcodeType(lpReference)) { using enum opcodes::Types;
 
         case conditional |  jump:
             return reachedConditionalJump;

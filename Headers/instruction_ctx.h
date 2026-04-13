@@ -1,14 +1,16 @@
 #pragma once
 #include <print>
-#include <cstdint>
+
 #ifndef WIN32
-    typedef unsigned char  BYTE, *LPBYTE;
-    typedef unsigned short WORD;
-    typedef unsigned long  DWORD;
-    typedef                BYTE BOOLEAN;
-    typedef void           VOID,* LPVOID;
+    using BYTE    = unsigned char;
+    using WORD    = unsigned short;
+    using DWORD   = unsigned long;
+    using BOOLEAN = BYTE;
+    using VOID    = void;
+    using LPVOID  = VOID*;
+
 #endif
-typedef unsigned long  long QWORD;
+using QWORD       = unsigned long long ;
 
 enum LdeStatus: BYTE;
 
@@ -32,7 +34,7 @@ namespace inst {
                    SIZE_OF_QWORD = 0x08;
 
 
-    enum first_byte_traits: BYTE {
+    enum FirstByteTraits: BYTE {
 		none		    = 0x00,
 		has_mod_rm      = 0x01,
 		special		    = 0x02,
@@ -51,7 +53,7 @@ namespace inst {
     }
 
     namespace opcodes {
-        enum types: WORD {
+        enum Types: WORD {
 	    	inc				  = 0x0000,
 	    	dec				  = 0x0001,
 	    	mov				  = 0x0002,
@@ -272,7 +274,7 @@ namespace inst {
 	};
 
 
-    static BYTE results[256] {
+    inline BYTE results[256] {
         has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm | prefix,
 		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
 		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
