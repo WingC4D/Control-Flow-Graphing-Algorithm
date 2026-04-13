@@ -1,8 +1,8 @@
 #include "function_tree.h"
 
-fnt::ErrorCode FunctionTree::trace() { using enum block::TraceResults;
+FunctionTree::ErrorCode FunctionTree::trace() { using namespace block;
     TraceContext Context(root);
-    while (!Context.explorationVec.empty() && Context.blocksCount < block::MAX_INDEX) {
+    while (!Context.explorationVec.empty() && Context.blocksCount < MAX_INDEX) {
         Context.currentIdx  = Context.explorationVec.back();
         Context.explorationVec.pop_back();
 
@@ -14,7 +14,7 @@ fnt::ErrorCode FunctionTree::trace() { using enum block::TraceResults;
         if (checkIfTraced(Context))
             continue;
 
-        switch (Context.result) {
+        switch (Context.result) { using enum TraceResults;
             case reachedJump:
                 handleJump(blocksVec[Context.currentIdx].resolveEndAsJump(), Context.blocksCount, Context);
                 break;
@@ -23,8 +23,8 @@ fnt::ErrorCode FunctionTree::trace() { using enum block::TraceResults;
                 const BYTE* const resolved_jump          = blocksVec[Context.currentIdx].resolveEndAsJump(),
                           * const next_instruction       = blocksVec[Context.currentIdx].landmarksPtr->end + blocksVec[Context.currentIdx].ldeState->contextsArray.back().getLength();
                 const auto        ConditionalJumpContext = next_instruction < resolved_jump ?
-                    ConditionalJumpCtx{ .shallow_ptr = next_instruction, .deep_ptr = resolved_jump, .shallowIdx = Context.blocksCount | COND_BLOCK_MASK, .deepIdx = Context.blocksCount + 1 | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK } :
-                    ConditionalJumpCtx{ .shallow_ptr = resolved_jump, .deep_ptr = next_instruction, .shallowIdx = Context.blocksCount | COND_BLOCK_MASK | C_JUMP_TAKEN_MASK, .deepIdx = Context.blocksCount + 1 | COND_BLOCK_MASK };
+                    ConditionalJumpCtx{ .shallow_ptr = next_instruction, .deep_ptr = resolved_jump, .shallowIdx = Context.blocksCount | COND_MASK, .deepIdx = Context.blocksCount + 1 | COND_MASK | COND_TAKEN_MASK } :
+                    ConditionalJumpCtx{ .shallow_ptr = resolved_jump, .deep_ptr = next_instruction, .shallowIdx = Context.blocksCount | COND_MASK | COND_TAKEN_MASK, .deepIdx = Context.blocksCount + 1 | COND_MASK };
                 handleJump(ConditionalJumpContext.shallow_ptr, ConditionalJumpContext.shallowIdx, Context);
                 handleJump(ConditionalJumpContext.deep_ptr, ConditionalJumpContext.deepIdx, Context);
                 break;
@@ -37,11 +37,11 @@ fnt::ErrorCode FunctionTree::trace() { using enum block::TraceResults;
             case reachedCall:
             case failed:
             case noNewBlock:
-                return fnt::failed;
+                return ErrorCode::failed;
         }
     }
     blocksVec.shrink_to_fit();
-    return fnt::success;
+    return success;
 }
 
 BOOLEAN FunctionTree::splitBlock(DWORD to_split_idx, const BYTE* splitting_address, std::map<const BYTE*, DWORD>& RootsMap) {

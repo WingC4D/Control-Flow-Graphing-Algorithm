@@ -6,7 +6,7 @@
 namespace block {
     constexpr BYTE  MAX_INSTRUCTIONS = 0xA0;
 
-    constexpr DWORD MAX_INDEX       = 0X1FFFFFFF,
+    constexpr DWORD MAX_INDEX       = 0X3FFFFFFF,
                     COND_MASK       = 0X80000000,
                     COND_TAKEN_MASK = 0X40000000,
                     INVALID_INDEX   = 0xFFFFFFFF;
@@ -70,13 +70,11 @@ struct Block {
         height = blk_height;
     }
 
-    void print() const;
+    void print_addresses_n_idx() const;
 
     void logIndex() const;
 
     void findNewEnd(const BYTE* interlacing_root_ptr) const;
-
-    BOOLEAN isInstructionHead(LPBYTE candidate_address) const;
 
     block::TraceResults trace(std::vector<const BYTE*>& NewFunctionsVec) const;
 

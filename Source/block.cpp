@@ -1,6 +1,7 @@
 #include "block.h"
 using namespace block;
 
+// A wrapping dispatcher around LdeState::traceBlock().
 TraceResults Block::trace(_Out_ std::vector<const BYTE*>& NewFunctionsVec) const { using enum TraceResults;
     switch (ldeState->traceBlock(landmarksPtr->root, NewFunctionsVec)) {
         case reachedJump:
@@ -23,6 +24,7 @@ TraceResults Block::trace(_Out_ std::vector<const BYTE*>& NewFunctionsVec) const
     return failed;
 }
 
+// A loop wrapped around inst::Context::map() & inst::Context::checkForNewBlock(), looking for redirecting jumps.
 TraceResults Block::LdeState::traceBlock(const BYTE* block_root, std::vector<const BYTE*>& NewFunctionsVec) {
     while (instruction_count < MAX_INSTRUCTIONS && status == success) {
         status = currContext.map(block_root + size);
@@ -66,19 +68,10 @@ BOOLEAN Block::isInRange(const BYTE* candidate_address) const {
     return true;
 }
 
-BOOLEAN Block::isInstructionHead(const LPBYTE candidate_address) const {
-    if (!landmarksPtr->end)
-        return false;
-
-    for (DWORD accumulated_length = 0; inst::Context& Context: ldeState->contextsArray) {
-        if (landmarksPtr->root + accumulated_length == candidate_address)
-            return true;
-        accumulated_length += Context.getLength();
-    }
-    return false;
-}
-
+// Ensures that the passed address is valid, and is a valid instruction head within the calling block's range and that the block was traced, then resizes the block to the preceding instruction head
 void Block::findNewEnd(const BYTE* interlacing_root_ptr) const {
+    if (!interlacing_root_ptr || !ldeState->instruction_count)
+        return;
     DWORD accumulated_length = 0;
     for (BYTE last_instruction_length = 0, new_instruction_count = 0; inst::Context& Context: ldeState->contextsArray) {
         if (landmarksPtr->root + accumulated_length == interlacing_root_ptr) {
@@ -92,7 +85,7 @@ void Block::findNewEnd(const BYTE* interlacing_root_ptr) const {
     }
 }
 
-void Block::resize(const BYTE new_instruction_count, const BYTE* new_end_address, DWORD new_size) const {
+void Block::resize(const BYTE new_instruction_count, const BYTE* new_end_address, const DWORD new_size) const {
     if (!new_instruction_count || !new_end_address)
         return;
 
@@ -102,7 +95,7 @@ void Block::resize(const BYTE new_instruction_count, const BYTE* new_end_address
     ldeState->instruction_count = new_instruction_count;
 }
 
-void Block::logIndex() const {//Logs index dynamically
+void Block::logIndex() const {
     if (idx & COND_MASK)
         return idx & COND_TAKEN_MASK ?
             std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Taken)\n", idx & MAX_INDEX, height) :
@@ -113,7 +106,7 @@ void Block::logIndex() const {//Logs index dynamically
         std::println("[!] Analysing Root Branch (Non Conditional)\n");
 }
 
-void Block::print() const {
+void Block::print_addresses_n_idx() const {
     if (!landmarksPtr->end) {
         std::println("[!] This Branch Is Not Traced Yet.");
         return;

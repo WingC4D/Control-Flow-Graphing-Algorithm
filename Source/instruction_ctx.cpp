@@ -177,6 +177,9 @@ Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_pt
 }
 
 Context::Status Context::analyseGroup3(const BYTE* const analysis_address) {
+    if (!analysis_address)
+        return no_input;
+
     if (!incrementLength())
         return instruction_overflow;
 
@@ -262,6 +265,9 @@ Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using
 }
 
 WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using namespace opcodes;
+    if (!analysis_address)
+        return no_input;
+
     switch (*analysis_address) {
         case RETURN_FAR:
             return ret | _far;
@@ -329,6 +335,9 @@ WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using nam
 }
 
 const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using enum opcodes::types;
+    if (!analysis_address)
+        return nullptr;
+
     switch (analyseOpcodeType(analysis_address)) {
         case jump:
         case call:
@@ -349,12 +358,11 @@ const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using en
     }
 }
 
-block::TraceResults Context::checkForNewBlock(const BYTE* lpReference) {
-    using enum opcodes::types; using enum block::TraceResults;
+block::TraceResults Context::checkForNewBlock(const BYTE* lpReference) { using enum block::TraceResults;
     if (!lpReference)
         return failed;
 
-    switch (analyseOpcodeType(lpReference)) {
+    switch (analyseOpcodeType(lpReference)) { using enum opcodes::types;
 
         case conditional |  jump:
             return reachedConditionalJump;

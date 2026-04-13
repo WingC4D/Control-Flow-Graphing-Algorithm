@@ -1,14 +1,8 @@
 #pragma once
 #include <map>
 #include "block.h"
-constexpr WORD  BASE_BLOCK_RESERVE_SIZE = 0x0400;
-
-constexpr DWORD NEW_FUNCTIONS_BASE_SIZE = 0x00,
-                ENDS_UNCOND_JUMP        = 0x20000000,
-                COND_BLOCK_MASK         = 0X80000000,
-                C_JUMP_TAKEN_MASK       = 0X40000000,
-				
-				INVALID_BLOCK_INDEX	    = 0xFFFFFFFF;
+constexpr WORD  BASE_BLOCK_RESERVE_SIZE = 0x0400,
+                NEW_FUNCTIONS_BASE_SIZE = 0x0004;
 
 enum AddBlock: BYTE {
 	was_traced = 0,
@@ -27,18 +21,16 @@ namespace block {
     enum TraceResults: BYTE;
 }
 
-namespace fnt {
-	enum ErrorCode: BYTE {
-		success,
-		failed
-	};
-}
-
 struct FunctionTree {
     const BYTE*              root;
 	std::vector<Block>       blocksVec;
 	std::vector<const BYTE*> newFunctionsVec;
 	std::vector<DWORD>		 leavesVec;
+
+    enum ErrorCode : BYTE {
+        success,
+        failed
+    };
 
     struct TraceContext {
         std::map<const BYTE*, DWORD> rootsMap;
@@ -46,7 +38,8 @@ struct FunctionTree {
         DWORD                        blocksCount,
                                      currentIdx;
         block::TraceResults          result;
-        
+                
+
 
         TraceContext(const BYTE* root_address) : rootsMap(std::map{ std::pair{ root_address, static_cast<DWORD>(0) } }), explorationVec(1) {
             explorationVec.reserve(BASE_BLOCK_RESERVE_SIZE);
@@ -61,7 +54,7 @@ struct FunctionTree {
         blocksVec.emplace_back(root, block::INVALID_INDEX, 0, 0);
 	}
 
-	fnt::ErrorCode trace();
+	ErrorCode trace();
 
     BOOLEAN splitBlock(DWORD to_split_idx, const BYTE* splitting_address, std::map<const BYTE*, DWORD>& RootsMap);
 
@@ -76,7 +69,7 @@ struct FunctionTree {
 	void print() const {
 		for (auto& block: blocksVec) {
 			block.logIndex();
-			block.print();
+			block.print_addresses_n_idx();
 			std::println();
 		}
 	}
