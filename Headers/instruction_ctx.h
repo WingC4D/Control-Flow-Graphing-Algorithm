@@ -1,5 +1,6 @@
 #pragma once
 #include <print>
+#include <cstdint>
 #ifndef WIN32
     typedef unsigned char  BYTE, *LPBYTE;
     typedef unsigned short WORD;
@@ -227,7 +228,7 @@ namespace inst {
             *reinterpret_cast<WORD*>(this) = 0;
         }
 
-        void log_addr_idx(const BYTE* instruction_head, DWORD idx) const;
+        void log(const BYTE* instruction_head, DWORD idx) const;
 
         block::TraceResults checkForNewBlock(const BYTE* lpReference);
 

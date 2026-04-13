@@ -387,7 +387,7 @@ block::TraceResults Context::checkForNewBlock(const BYTE* lpReference) { using e
     }
 }
 
-void Context::log_addr_idx(const BYTE *instruction_head, DWORD idx) const {
+void Context::log(const BYTE *instruction_head, DWORD idx) const {
     std::print("#{:3d} @{:P} ", idx, reinterpret_cast<const void*>(instruction_head));
     for (BYTE i = 0, instruction_length = length; i < instruction_length; i++)
         std::print("{:#04X} ", instruction_head[i]);

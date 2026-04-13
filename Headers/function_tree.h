@@ -4,11 +4,7 @@
 constexpr WORD  BASE_BLOCK_RESERVE_SIZE = 0x0400,
                 NEW_FUNCTIONS_BASE_SIZE = 0x0004;
 
-enum AddBlock: BYTE {
-	was_traced = 0,
-	added	   = 1,
-	split	   = 2
-};
+
 
 struct ConditionalJumpCtx {
     const BYTE* shallow_ptr,
@@ -21,42 +17,57 @@ namespace block {
     enum TraceResults: BYTE;
 }
 
-struct FunctionTree {
-    const BYTE*              root;
-	std::vector<Block>       blocksVec;
-	std::vector<const BYTE*> newFunctionsVec;
-	std::vector<DWORD>		 leavesVec;
-
+class FunctionTree {
+public:
     enum ErrorCode : BYTE {
         success,
         failed
     };
+    FunctionTree(LPVOID lpFunctionRoot) : root(static_cast<BYTE*>(lpFunctionRoot)) {
+        blocksVec.reserve(BASE_BLOCK_RESERVE_SIZE);
+        blocksVec.emplace_back(root, block::INVALID_INDEX, 0, 0);
+        newFunctionsVec.reserve(NEW_FUNCTIONS_BASE_SIZE);
+    }
+
+    ErrorCode trace();
+
+    void print() const {
+        for (auto& block : blocksVec) {
+            block.logIndex();
+            block.logInstructionBytesAndAddresses();
+            std::println();
+        }
+    }
+
+private:
+    const BYTE*              root;
+	std::vector<Block>       blocksVec;
+	std::vector<const BYTE*> newFunctionsVec;
+	std::vector<DWORD>		 leavesVec{};
 
     struct TraceContext {
         std::map<const BYTE*, DWORD> rootsMap;
         std::vector<DWORD>           explorationVec;
         DWORD                        blocksCount,
-                                     currentIdx;
+                                     currIndex;
         block::TraceResults          result;
-                
-
 
         TraceContext(const BYTE* root_address) : rootsMap(std::map{ std::pair{ root_address, static_cast<DWORD>(0) } }), explorationVec(1) {
             explorationVec.reserve(BASE_BLOCK_RESERVE_SIZE);
-            currentIdx   = 0;
+            currIndex    = 0;
             blocksCount  = 1;
             result       = block::TraceResults::noNewBlock;
         }
     };
 
-	FunctionTree(LPVOID lpFunctionRoot): root(static_cast<BYTE*>(lpFunctionRoot)), newFunctionsVec(NEW_FUNCTIONS_BASE_SIZE), leavesVec(0) {
-        blocksVec.reserve(BASE_BLOCK_RESERVE_SIZE);
-        blocksVec.emplace_back(root, block::INVALID_INDEX, 0, 0);
-	}
 
-	ErrorCode trace();
+    enum AddBlock : BYTE {
+        was_traced = 0,
+        added = 1,
+        split = 2
+    };
 
-    BOOLEAN splitBlock(DWORD to_split_idx, const BYTE* splitting_address, std::map<const BYTE*, DWORD>& RootsMap);
+    BOOLEAN splitBlock(DWORD to_split_idx, const BYTE* splitting_address, TraceContext& TraceCtx);
 
 	AddBlock addBlock(const BYTE *address_to_add, DWORD index, TraceContext& Context);
 
@@ -65,12 +76,4 @@ struct FunctionTree {
 	inline BOOLEAN checkIfTraced(TraceContext& Context);
 
 	void handleJump(const BYTE* resolved_address, DWORD new_block_idx, TraceContext& Context);
-
-	void print() const {
-		for (auto& block: blocksVec) {
-			block.logIndex();
-			block.print_addresses_n_idx();
-			std::println();
-		}
-	}
 };

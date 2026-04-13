@@ -1,5 +1,4 @@
 #pragma once
-#include <memory>
 #include <vector>
 #include "lde_common.h"
 
@@ -16,15 +15,6 @@ namespace block {
     
 
 }
-
-struct BlockLandmarks {
-    const BYTE* const root,
-              *       end;
-
-    BlockLandmarks(const BYTE* const root_address, const BYTE* const end_address = nullptr) : root(root_address) {
-        end = end_address;
-    }
-};
 
 struct Block {
     struct LdeState: LdeCommon {
@@ -55,28 +45,28 @@ struct Block {
         }
     };
 
-    std::unique_ptr<BlockLandmarks>  landmarksPtr;
-    DWORD                            idx;
-    DWORD                            height;
-    std::unique_ptr<LdeState>        ldeState;
-    std::vector<DWORD>               flowFromVec;
-    std::vector<DWORD>               flowToVec;
+    const BYTE* const                root,
+              *                      end = nullptr;
+    DWORD                            idx,
+                                     height;
+    LdeState                         lde{};
+    std::vector<DWORD>               flowFromVec{};
+    std::vector<DWORD>               flowToVec{};
 
-    Block(const BYTE* root_address, DWORD parent_index, DWORD index, DWORD blk_height) :
-        landmarksPtr(std::make_unique<BlockLandmarks>(root_address)), ldeState(std::make_unique<LdeState>()), flowFromVec(0), flowToVec(0) {
+    Block(const BYTE* root_address, DWORD parent_index, DWORD index, DWORD block_height) : root(root_address) {
         if (parent_index != block::INVALID_INDEX)
             flowFromVec.emplace_back(parent_index);
-        idx     = index;
-        height = blk_height;
+        idx    = index;
+        height = block_height;
     }
 
-    void print_addresses_n_idx() const;
+    void logInstructionBytesAndAddresses() const;
 
     void logIndex() const;
 
-    void findNewEnd(const BYTE* interlacing_root_ptr) const;
+    void findNewEnd(const BYTE* interlacing_root_ptr);
 
-    block::TraceResults trace(std::vector<const BYTE*>& NewFunctionsVec) const;
+    block::TraceResults trace(std::vector<const BYTE*>& NewFunctionsVec);
 
     BOOLEAN isInRange(const BYTE* candidate_address) const;
 
@@ -85,14 +75,14 @@ struct Block {
     }
 
     const BYTE* getNextInstruction() const {
-        return landmarksPtr->root + ldeState->size;
+        return root + lde.size;
     }
 
-    const BYTE* resolveEndAsJump() const {
-        return ldeState->contextsArray.back().resolveJump(landmarksPtr->end);
+    const BYTE* resolveEndAsJump() {
+        return lde.contextsArray.back().resolveJump(end);
     }
 
-    inline void resize(BYTE new_instruction_count, const BYTE* new_end_address, DWORD new_size) const;
+    inline void resize(BYTE new_instruction_count, const BYTE* new_end_address, DWORD new_size);
 
     static void addResolvedCall(std::vector<const BYTE*>& NewFunctionVec, const BYTE* resolved_address) {
         for (const BYTE* stored_func_address : NewFunctionVec)

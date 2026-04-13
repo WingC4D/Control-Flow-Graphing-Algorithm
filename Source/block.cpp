@@ -2,18 +2,18 @@
 using namespace block;
 
 // A wrapping dispatcher around LdeState::traceBlock().
-TraceResults Block::trace(_Out_ std::vector<const BYTE*>& NewFunctionsVec) const { using enum TraceResults;
-    switch (ldeState->traceBlock(landmarksPtr->root, NewFunctionsVec)) {
+TraceResults Block::trace(_Out_ std::vector<const BYTE*>& NewFunctionsVec) { using enum TraceResults;
+    switch (lde.traceBlock(root, NewFunctionsVec)) {
         case reachedJump:
-            landmarksPtr->end = landmarksPtr->root + ldeState->getLastInstHeadOffset();
+            end = root + lde.getLastInstHeadOffset();
             return reachedJump;
 
         case reachedConditionalJump:
-            landmarksPtr->end = landmarksPtr->root + ldeState->getLastInstHeadOffset();
+            end = root + lde.getLastInstHeadOffset();
             return reachedConditionalJump;
 
         case reachedReturn:
-            landmarksPtr->end = landmarksPtr->root + ldeState->getLastInstHeadOffset();
+            end = root + lde.getLastInstHeadOffset();
             return reachedReturn;
 
         case noNewBlock:
@@ -57,27 +57,27 @@ TraceResults Block::LdeState::traceBlock(const BYTE* block_root, std::vector<con
 }
 
 BOOLEAN Block::isInRange(const BYTE* candidate_address) const {
-    if (!landmarksPtr->end)
+    if (!end)
         return false;
 
-    if (landmarksPtr->root > candidate_address)
+    if (root > candidate_address)
         return false;
 
-    if (landmarksPtr->end < candidate_address)
+    if (end < candidate_address)
         return false;
     return true;
 }
 
 // Ensures that the passed address is valid, and is a valid instruction head within the calling block's range and that the block was traced, then resizes the block to the preceding instruction head
-void Block::findNewEnd(const BYTE* interlacing_root_ptr) const {
-    if (!interlacing_root_ptr || !ldeState->instruction_count)
+void Block::findNewEnd(const BYTE* interlacing_root_ptr) {
+    if (!interlacing_root_ptr || !lde.instruction_count)
         return;
     DWORD accumulated_length = 0;
-    for (BYTE last_instruction_length = 0, new_instruction_count = 0; inst::Context& Context: ldeState->contextsArray) {
-        if (landmarksPtr->root + accumulated_length == interlacing_root_ptr) {
+    for (BYTE last_instruction_length = 0, new_instruction_count = 0; inst::Context& Context: lde.contextsArray) {
+        if (root + accumulated_length == interlacing_root_ptr) {
             if (new_instruction_count)
-                resize(new_instruction_count, interlacing_root_ptr - last_instruction_length, accumulated_length);
-            return;
+                return resize(new_instruction_count, interlacing_root_ptr - last_instruction_length, accumulated_length);
+            
         }
         last_instruction_length = Context.getLength();
         accumulated_length     += last_instruction_length;
@@ -85,14 +85,14 @@ void Block::findNewEnd(const BYTE* interlacing_root_ptr) const {
     }
 }
 
-void Block::resize(const BYTE new_instruction_count, const BYTE* new_end_address, const DWORD new_size) const {
+void Block::resize(const BYTE new_instruction_count, const BYTE* new_end_address, const DWORD new_size) {
     if (!new_instruction_count || !new_end_address)
         return;
 
-    ldeState->contextsArray.resize(new_instruction_count);
-    landmarksPtr->end           = new_end_address;
-    ldeState->size              = new_size;
-    ldeState->instruction_count = new_instruction_count;
+    lde.contextsArray.resize(new_instruction_count);
+    end                   = new_end_address;
+    lde.size              = new_size;
+    lde.instruction_count = new_instruction_count;
 }
 
 void Block::logIndex() const {
@@ -106,13 +106,13 @@ void Block::logIndex() const {
         std::println("[!] Analysing Root Branch (Non Conditional)\n");
 }
 
-void Block::print_addresses_n_idx() const {
-    if (!landmarksPtr->end) {
+void Block::logInstructionBytesAndAddresses() const {
+    if (!end) {
         std::println("[!] This Branch Is Not Traced Yet.");
         return;
     }
-    for (DWORD accumulated_length = 0, instruction_count = 0; inst::Context Context : ldeState->contextsArray) {
-        Context.log_addr_idx(landmarksPtr->root + accumulated_length, static_cast<BYTE>(instruction_count));
+    for (DWORD accumulated_length = 0, instruction_count = 0; inst::Context Context : lde.contextsArray) {
+        Context.log(root + accumulated_length, static_cast<BYTE>(instruction_count));
         accumulated_length += Context.getLength();
         if (instruction_count >= MAX_INSTRUCTIONS) {
             std::println("Hit an error while printing Block #{:03d}", idx);
