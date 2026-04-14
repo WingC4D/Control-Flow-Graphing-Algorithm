@@ -98,12 +98,12 @@ void Block::resize(const BYTE new_instruction_count, const BYTE* new_end_address
 void Block::logIndex() const {
     if (idx & COND_MASK)
         return idx & COND_TAKEN_MASK ?
-            std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Taken)\n", idx & MAX_INDEX, height) :
-            std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Conditional Jump Not Taken)\n", idx & MAX_INDEX, height);
+            std::println("[i] Analyzing Branch Of Linear Index {:#06X} & Of Height: {:#04X} (Conditional Jump Taken)", idx & MAX_INDEX, height) :
+            std::println("[i] Analyzing Branch Of Linear Index {:#06X} & Of Height: {:#04X} (Conditional Jump Not Taken)", idx & MAX_INDEX, height);
 
     return height ?
-        std::println("[!] Analysing Branch Of Linear Index {:02d} & Of Height: #{:02d} (Non Conditional)\n", idx & MAX_INDEX, height) :
-        std::println("[!] Analysing Root Branch (Non Conditional)\n");
+        std::println("[!] Analyzing Branch Of Linear Index {:#06X} & Of Height: {:#04X} (Non Conditional)", idx & MAX_INDEX, height) :
+        std::println("[!] Analyzing Root Branch (Non Conditional)");
 }
 
 void Block::logInstructionBytesAndAddresses() const {
@@ -115,10 +115,34 @@ void Block::logInstructionBytesAndAddresses() const {
         Context.log(root + accumulated_length, static_cast<BYTE>(instruction_count));
         accumulated_length += Context.getLength();
         if (instruction_count >= MAX_INSTRUCTIONS) {
-            std::println("Hit an error while printing Block #{:03d}", idx);
+            std::println("Hit an error while printing Block #{:06X}", idx);
             return;
         }
         instruction_count++;
     }
+    std::println();
 }
 
+void Block::logFromAndToVectors() const {
+    if (!flowFromVec.empty()) {
+        std::print("[i] This block flows from: ");
+        QWORD parent = 0,
+              size   = flowFromVec.size() - 1;
+        for (;  parent < size; parent++)
+            std::print("{:#06X}, ", flowFromVec[parent]);
+        std::println("{:#06X}", flowFromVec[parent]);
+    } else {
+        std::println("[i] This is a root block.");
+    }
+    if (!flowToVec.empty()) {
+        std::print("[i] this block flows to:   ");
+        QWORD child = 0,
+            size = flowToVec.size() - 1;
+        for (; child < size; child++)
+            std::print("{:#06X}, ", flowToVec[child]);
+        std::println("{:#06X}", flowToVec[child]);
+    } else {
+        std::println("[i] This is a leaf block.");
+    }
+    std::println();
+}

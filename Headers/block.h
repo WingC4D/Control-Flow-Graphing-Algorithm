@@ -16,7 +16,7 @@ struct Block {
     struct LdeState: LdeCommon {
         std::vector<inst::Context> contextsArray;
 
-        LdeState() : contextsArray(block::MAX_INSTRUCTIONS) {}
+        LdeState(): contextsArray(block::MAX_INSTRUCTIONS) {}
 
         void prepareNextStep() {
             size                            += currContext.getLength();
@@ -49,12 +49,13 @@ struct Block {
     std::vector<DWORD>               flowFromVec{};
     std::vector<DWORD>               flowToVec{};
 
-    Block(const BYTE* root_address, DWORD parent_index = block::INVALID_INDEX, DWORD index = 0, DWORD block_height = 0) : root(root_address) {
+    Block(const BYTE* root_address, DWORD parent_index = block::INVALID_INDEX, DWORD index = 0, DWORD block_height = 0): root(root_address) {
         if (parent_index != block::INVALID_INDEX)
             flowFromVec.emplace_back(parent_index);
         idx    = index;
         height = block_height;
     }
+    void logFromAndToVectors() const;
 
     void logInstructionBytesAndAddresses() const;
 
@@ -76,6 +77,14 @@ struct Block {
 
     const BYTE* resolveEndAsJump() {
         return lde.contextsArray.back().resolveJump(end);
+    }
+
+    BOOLEAN addUniqueParent(DWORD candidate_index) {
+        for (DWORD parent_index: flowFromVec)
+            if (parent_index == candidate_index)
+                return false;
+        flowFromVec.emplace_back(candidate_index);
+        return true;
     }
 
     inline void resize(BYTE new_instruction_count, const BYTE* new_end_address, DWORD new_size);

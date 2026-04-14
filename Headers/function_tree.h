@@ -34,8 +34,8 @@ public:
     void print() const {
         for (const auto& block : blocksVec) {
             block.logIndex();
+            block.logFromAndToVectors();
             block.logInstructionBytesAndAddresses();
-            std::println();
         }
     }
 
@@ -69,6 +69,24 @@ private:
     BOOLEAN splitBlock(DWORD to_split_idx, const BYTE* splitting_address, TraceContext& TraceCtx);
 
 	AddBlock addBlock(const BYTE *address_to_add, DWORD index, TraceContext& Context);
+
+    BOOLEAN changeLeaf(DWORD old_index, DWORD new_index) {
+        for (DWORD& leaf: leavesVec)
+            if (leaf == old_index) {
+                leaf = new_index;
+                return true;
+            }
+        return false;
+    }
+
+    void addLeaf(DWORD leaf_index) {
+        for (DWORD leaf: leavesVec)
+            if (leaf_index == leaf)
+                return;
+        leavesVec.emplace_back(leaf_index);
+    }
+
+    BOOLEAN moveBlockData(DWORD old_index, DWORD new_index);
 
 	void transferUniqueChildren(DWORD old_parent_idx, DWORD new_parent_idx);
 

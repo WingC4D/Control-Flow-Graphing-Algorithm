@@ -303,7 +303,7 @@ WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using nam
 
                 default:
                     rip_relative = true;
-                    return (analysis_address[1] & 0xF0) == 0x80 ? indirect | conditional | jump : unknown;
+                    return (analysis_address[1] & 0xF0) == 0x80 ? conditional | _far | jump : unknown;
             }
 
         case 0xFF:
@@ -339,6 +339,7 @@ const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using en
         return nullptr;
 
     switch (analyseOpcodeType(analysis_address)) {
+        case conditional| _far | jump:
         case jump:
         case call:
             return analysis_address + length + *reinterpret_cast<const int* const>(analysis_address + getPreDisposition());
@@ -364,6 +365,7 @@ block::TraceResults Context::checkForNewBlock(const BYTE* lpReference) { using e
 
     switch (analyseOpcodeType(lpReference)) { using enum opcodes::Types;
 
+        case conditional | _far | jump:
         case conditional |  jump:
             return reachedConditionalJump;
 
