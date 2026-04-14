@@ -6,9 +6,6 @@ FunctionTree::ErrorCode FunctionTree::trace() { using namespace block;
         Context.currIndex  = Context.explorationVec.back();
         Context.explorationVec.pop_back();
 
-        if (Context.currIndex == 0x95)
-            std::print("");
-
         if (blocksVec[Context.currIndex].end)
             continue;
 
@@ -19,19 +16,13 @@ FunctionTree::ErrorCode FunctionTree::trace() { using namespace block;
 
         switch (Context.result) { using enum TraceResults;
             case reachedJump:
-                handleJump(blocksVec[Context.currIndex].resolveEndAsJump(), Context.blocksCount, Context);
+                if (no_input == handleJump(blocksVec[Context.currIndex].resolveEndAsJump(), Context.blocksCount, Context))
+                    return ErrorCode::failed;
                 break;
 
             case reachedConditionalJump: {
-                const BYTE* const resolved_jump          = blocksVec[Context.currIndex].resolveEndAsJump(),
-                          * const next_instruction       = blocksVec[Context.currIndex].getNextInstruction();
-                auto        ConditionalJumpContext = next_instruction < resolved_jump ?
-                    ConditionalJumpCtx{ .shallow_ptr = next_instruction, .deep_ptr = resolved_jump, .shallowIdx = Context.blocksCount | COND_MASK, .deepIdx = Context.blocksCount + 1 | COND_MASK | COND_TAKEN_MASK } :
-                    ConditionalJumpCtx{ .shallow_ptr = resolved_jump, .deep_ptr = next_instruction, .shallowIdx = Context.blocksCount | COND_MASK | COND_TAKEN_MASK, .deepIdx = Context.blocksCount + 1 | COND_MASK };
-                handleJump(ConditionalJumpContext.shallow_ptr, ConditionalJumpContext.shallowIdx, Context);
-                if ((MAX_INDEX & ConditionalJumpContext.deepIdx) == Context.blocksCount + 1)
-                    ConditionalJumpContext.deepIdx--;
-                handleJump(ConditionalJumpContext.deep_ptr, ConditionalJumpContext.deepIdx, Context);
+                if (no_input == handleConditionalJump(Context))
+                    return ErrorCode::failed;
                 break;
             }
 
@@ -53,92 +44,16 @@ FunctionTree::ErrorCode FunctionTree::trace() { using namespace block;
 
     return success;
 }
-
-BOOLEAN FunctionTree::splitBlock(DWORD to_split_idx, const BYTE* splitting_address, TraceContext& TraceCtx) {
-    if (!splitting_address)
-        return false;
-    if (TraceCtx.currIndex == 0x95 || to_split_idx == 0x95 || TraceCtx.blocksCount == 0x95)
-        std::print("");
-    BYTE original_count = blocksVec[to_split_idx].lde.instruction_count,
-         iterated_count = 0,
-         new_count      = 0;
-
-    for (DWORD last_length = 0, accumulated_length = 0; const inst::Context& Context : blocksVec[to_split_idx].lde.contextsArray) {
-        if (blocksVec[to_split_idx].root + accumulated_length != splitting_address || !iterated_count) {
-            iterated_count++;
-            last_length         = Context.getLength();
-            accumulated_length += last_length;
-            continue;
-        }
-
-        blocksVec.emplace_back(splitting_address, to_split_idx, TraceCtx.blocksCount, blocksVec[to_split_idx].height + 1);
-        blocksVec[TraceCtx.currIndex].flowToVec.emplace_back(TraceCtx.blocksCount);
-        blocksVec[TraceCtx.blocksCount].flowFromVec.emplace_back(TraceCtx.currIndex);
-        for (; iterated_count + new_count < original_count; new_count++)
-            blocksVec.back().lde.contextsArray[new_count] = blocksVec[to_split_idx].lde.contextsArray[new_count + iterated_count];
-
-        TraceCtx.rootsMap[splitting_address] = TraceCtx.blocksCount;
-        blocksVec.back().resize(new_count, blocksVec[to_split_idx].end, blocksVec[to_split_idx].lde.size - accumulated_length);
-
-        blocksVec[to_split_idx].resize(iterated_count, splitting_address - last_length, accumulated_length);
-        transferUniqueChildren(to_split_idx, TraceCtx.blocksCount);
-        break;
-    }
-    return iterated_count != original_count;
-}
-
-FunctionTree::AddBlock FunctionTree::addBlock(const BYTE* address_to_add, const DWORD index, TraceContext& Context) {
-    if (Context.rootsMap.contains(address_to_add)) {
-        return was_traced;
-    }
-
-    auto UpperBound = Context.rootsMap.upper_bound(address_to_add);
-    if (UpperBound != Context.rootsMap.begin()) {
-        if (blocksVec[(--UpperBound)->second].isInRange(address_to_add)) {
-            if (splitBlock(UpperBound->second, address_to_add, Context)) 
-                return split;
-        }
-    }
-    blocksVec.emplace_back(address_to_add, Context.currIndex, index, blocksVec[Context.currIndex].height + 1);
-    return added;
-}
-
-void FunctionTree::handleJump(const BYTE* resolved_address, const DWORD new_block_idx, TraceContext& Context) {
-    if (!resolved_address)
-        return;
-
-
-    if (checkIfTraced(Context))
-        return;
-
-    switch (addBlock(resolved_address, new_block_idx, Context)) {
-        case added:
-            Context.rootsMap[resolved_address] = Context.blocksCount;
-            blocksVec[Context.currIndex].flowToVec.emplace_back(Context.blocksCount);
-            Context.explorationVec.emplace_back(Context.blocksCount);
-            Context.blocksCount++;
-            break;
-        
-        case was_traced:
-            blocksVec[Context.rootsMap.at(resolved_address)].flowFromVec.emplace_back(Context.currIndex);
-            blocksVec[Context.currIndex].flowToVec.emplace_back(Context.rootsMap.at(resolved_address));
-            break;
-
-        case split:
-            Context.blocksCount++;
-            break;
-    }
-}
-
+ 
 BOOLEAN FunctionTree::checkIfTraced(TraceContext& Context) {
     if (Context.rootsMap.size() <= 1)
         return false;
 
     const auto NextBlockIterator = Context.rootsMap.upper_bound(blocksVec[Context.currIndex].root);
-    if (NextBlockIterator == Context.rootsMap.end()) 
+    if (NextBlockIterator == Context.rootsMap.end())
         return false;
 
-    if (Context.currIndex == NextBlockIterator->second) 
+    if (Context.currIndex == NextBlockIterator->second)
         return false;
 
     if (!blocksVec[Context.currIndex].isInRange(blocksVec[NextBlockIterator->second].root))
@@ -151,10 +66,100 @@ BOOLEAN FunctionTree::checkIfTraced(TraceContext& Context) {
     return true;
 }
 
+FunctionTree::AddBlock FunctionTree::handleConditionalJump(TraceContext& Context) {
+    ConditionalJumpCtx ConditionalContext(blocksVec[Context.currIndex].resolveEndAsJump(), blocksVec[Context.currIndex].getNextInstruction(), Context.blocksCount);
+    switch (handleJump(ConditionalContext.shallow_ptr, ConditionalContext.shallowIdx, Context)) {
+        case added:
+        case split:
+            ConditionalContext.deepIdx++;
+            break;
+
+        case was_traced:
+            break;
+
+    case no_input:
+        return no_input;
+    }
+    return handleJump(ConditionalContext.deep_ptr, ConditionalContext.deepIdx, Context);
+}
+
+FunctionTree::AddBlock FunctionTree::handleJump(const BYTE* resolved_address, const DWORD new_block_idx, TraceContext& Context) {
+    if (!resolved_address)
+        return no_input;
+
+    switch (addBlock(resolved_address, new_block_idx, Context)) {
+        case added:
+            Context.rootsMap[resolved_address] = Context.blocksCount;
+            blocksVec[Context.currIndex].flowToVec.emplace_back(Context.blocksCount);
+            Context.explorationVec.emplace_back(Context.blocksCount);
+            Context.blocksCount++;
+            return added;
+
+        case was_traced:
+            blocksVec[Context.rootsMap.at(resolved_address)].flowFromVec.emplace_back(Context.currIndex);
+            blocksVec[Context.currIndex].flowToVec.emplace_back(Context.rootsMap.at(resolved_address));
+            return was_traced;
+
+        case split:
+            Context.blocksCount++;
+            return split;
+
+        case no_input:
+            return no_input;
+    }
+    return no_input;
+}
+
+FunctionTree::AddBlock FunctionTree::addBlock(const BYTE* address_to_add, const DWORD index, TraceContext& Context) {
+    if (Context.rootsMap.contains(address_to_add)) 
+        return was_traced;
+
+    auto UpperBound = Context.rootsMap.upper_bound(address_to_add);
+    if (UpperBound != Context.rootsMap.begin()) {
+        if (blocksVec[(--UpperBound)->second].isInRange(address_to_add)) 
+            if (splitBlock(UpperBound->second, address_to_add, Context))
+                return split;
+    }
+
+    blocksVec.emplace_back(address_to_add, Context.currIndex, index, blocksVec[Context.currIndex].height + 1);
+    return added;
+}
+
+BOOLEAN FunctionTree::splitBlock(DWORD to_split_idx, const BYTE* splitting_address, TraceContext& TraceCtx) {
+    if (!splitting_address)
+        return false;
+
+    BYTE original_count = blocksVec[to_split_idx].lde.instruction_count,
+         iterated_count = 0,
+         new_count      = 0;
+
+    for (DWORD last_length = 0, accumulated_length = 0; const inst::Context& Context: blocksVec[to_split_idx].lde.contextsArray) {
+        if (blocksVec[to_split_idx].root + accumulated_length != splitting_address || !accumulated_length) {
+            iterated_count++;
+            last_length         = Context.getLength();
+            accumulated_length += last_length;
+            continue;
+        }
+        blocksVec.emplace_back(splitting_address, to_split_idx, TraceCtx.blocksCount, blocksVec[to_split_idx].height + 1);
+        blocksVec[TraceCtx.currIndex].flowToVec.emplace_back(TraceCtx.blocksCount);
+        blocksVec[TraceCtx.blocksCount].flowFromVec.emplace_back(TraceCtx.currIndex);
+
+        for (; iterated_count + new_count < original_count; new_count++)
+            blocksVec.back().lde.contextsArray[new_count] = blocksVec[to_split_idx].lde.contextsArray[new_count + iterated_count];
+
+        TraceCtx.rootsMap[splitting_address] = TraceCtx.blocksCount;
+        blocksVec.back().resize(new_count, blocksVec[to_split_idx].end, blocksVec[to_split_idx].lde.size - accumulated_length);
+        blocksVec[to_split_idx].resize(iterated_count, splitting_address - last_length, accumulated_length);
+
+        transferUniqueChildren(to_split_idx, TraceCtx.blocksCount);
+        break;
+    }
+    return iterated_count != original_count;
+}
+
 void FunctionTree::transferUniqueChildren(DWORD old_parent_idx, DWORD new_parent_idx) {
     if (blocksVec[old_parent_idx].flowToVec.empty()) {
         blocksVec[old_parent_idx].flowToVec.emplace_back(new_parent_idx);
-        
         if (!blocksVec[new_parent_idx].addUniqueParent(old_parent_idx)) {
             if (!changeLeaf(old_parent_idx, new_parent_idx))
                 leavesVec.emplace_back(new_parent_idx);
@@ -162,10 +167,10 @@ void FunctionTree::transferUniqueChildren(DWORD old_parent_idx, DWORD new_parent
         return;
     }
     BOOLEAN transferred_parent = false;
-    for (const DWORD child_idx : blocksVec[old_parent_idx].flowToVec) {
+    for (const DWORD child_idx: blocksVec[old_parent_idx].flowToVec) {
         if (child_idx == new_parent_idx)
             continue;
-        for (BYTE parentsVec_idx = 0; const DWORD parent_idx : blocksVec[child_idx].flowFromVec) {
+        for (BYTE parentsVec_idx = 0; const DWORD parent_idx: blocksVec[child_idx].flowFromVec) {
             if (parent_idx == old_parent_idx) {
                 blocksVec[child_idx].flowFromVec[parentsVec_idx] = new_parent_idx;
                 transferred_parent = true;
@@ -175,19 +180,17 @@ void FunctionTree::transferUniqueChildren(DWORD old_parent_idx, DWORD new_parent
         }
         blocksVec[new_parent_idx].flowToVec.emplace_back(child_idx);
     }
-    if (transferred_parent) {
-        blocksVec[old_parent_idx].flowToVec.clear();
-        blocksVec[old_parent_idx].flowToVec.emplace_back(new_parent_idx);
-    }
+    if (!transferred_parent)
+        return;
+
+    blocksVec[old_parent_idx].flowToVec.clear();
+    blocksVec[old_parent_idx].flowToVec.emplace_back(new_parent_idx);
 }
 
 
 BOOLEAN FunctionTree::moveBlockData(DWORD old_index, DWORD new_index) {
     if (!blocksVec[old_index].end)
         return false;
-
-    if (new_index == 0x95)
-        std::print("");
 
     if (blocksVec[old_index].end == blocksVec[new_index].end) {
         blocksVec[old_index].root < blocksVec[new_index].root ?
@@ -201,7 +204,7 @@ BOOLEAN FunctionTree::moveBlockData(DWORD old_index, DWORD new_index) {
             inst::Context& Context: blocksVec[old_index].lde.contextsArray) {
             if (blocksVec[old_index].root + accumulated_length != blocksVec[new_index].root || !accumulated_length) {
                 iterated_count++;
-                last_length = Context.getLength();
+                last_length         = Context.getLength();
                 accumulated_length += last_length;
                 continue;
             }

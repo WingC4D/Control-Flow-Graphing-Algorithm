@@ -18,7 +18,7 @@ int main() { using enum FunctionTree::ErrorCode;
                  FuncTree1(target_function);
 	
     FuncTree1.trace() == success ? FuncTree1.print() : std::println("[x] Analysis Failed!");
-    //FuncTree0.trace() == success ? FuncTree0.print() : std::println("[x] Analysis Failed!");
+    FuncTree0.trace() == success ? FuncTree0.print() : std::println("[x] Analysis Failed!");
 	
     std::cin.get();
 	return 0;

@@ -11,6 +11,20 @@ struct ConditionalJumpCtx {
               * deep_ptr;
 	DWORD	    shallowIdx,
 			    deepIdx;
+
+    ConditionalJumpCtx(const BYTE* resolved_address, const BYTE*next_address, DWORD current_block_count) {
+        if (next_address < resolved_address) {
+            shallow_ptr = next_address;
+            deep_ptr    = resolved_address;
+            shallowIdx  = current_block_count | block::COND_MASK;
+            deepIdx     = current_block_count | block::COND_MASK | block::COND_TAKEN_MASK;
+            return;
+        }
+        shallow_ptr = resolved_address ;
+        deep_ptr    = next_address;
+        shallowIdx  = current_block_count | block::COND_MASK | block::COND_TAKEN_MASK;
+        deepIdx     = current_block_count | block::COND_MASK;
+    }
 };
 
 namespace block {
@@ -62,8 +76,9 @@ private:
 
     enum AddBlock : BYTE {
         was_traced = 0,
-        added = 1,
-        split = 2
+        added      = 1,
+        split      = 2,
+        no_input   = 3
     };
 
     BOOLEAN splitBlock(DWORD to_split_idx, const BYTE* splitting_address, TraceContext& TraceCtx);
@@ -92,5 +107,7 @@ private:
 
 	inline BOOLEAN checkIfTraced(TraceContext& Context);
 
-	void handleJump(const BYTE* resolved_address, DWORD new_block_idx, TraceContext& Context);
+	AddBlock handleJump(const BYTE* resolved_address, DWORD new_block_idx, TraceContext& Context);
+
+    AddBlock handleConditionalJump(TraceContext& Context);
 };
