@@ -101,8 +101,6 @@ private:
         leavesVec.emplace_back(leaf_index);
     }
 
-    BOOLEAN moveBlockData(DWORD old_index, DWORD new_index);
-
 	void transferUniqueChildren(DWORD old_parent_idx, DWORD new_parent_idx);
 
 	inline BOOLEAN checkIfTraced(TraceContext& Context);

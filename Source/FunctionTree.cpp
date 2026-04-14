@@ -186,35 +186,3 @@ void FunctionTree::transferUniqueChildren(DWORD old_parent_idx, DWORD new_parent
     blocksVec[old_parent_idx].flowToVec.clear();
     blocksVec[old_parent_idx].flowToVec.emplace_back(new_parent_idx);
 }
-
-BOOLEAN FunctionTree::moveBlockData(DWORD old_index, DWORD new_index) {
-    if (!blocksVec[old_index].end)
-        return false;
-
-    if (blocksVec[old_index].end == blocksVec[new_index].end) {
-        blocksVec[old_index].root < blocksVec[new_index].root ?
-            blocksVec[old_index].findNewEnd(blocksVec[new_index].root):
-            blocksVec[new_index].findNewEnd(blocksVec[old_index].root);
-        return true;
-    }
-    if (!blocksVec[new_index].end && blocksVec[old_index].root < blocksVec[new_index].root) {
-        DWORD accumulated_length = 0;
-        for (BYTE last_length = 0, new_count = 0, iterated_count = 0, original_count = blocksVec[old_index].lde.instruction_count;
-            inst::Context& Context: blocksVec[old_index].lde.contextsArray) {
-            if (blocksVec[old_index].root + accumulated_length != blocksVec[new_index].root || !accumulated_length) {
-                iterated_count++;
-                last_length         = Context.getLength();
-                accumulated_length += last_length;
-                continue;
-            }
-            for (; new_count + iterated_count < original_count; new_count++)
-                blocksVec[new_index].lde.contextsArray[new_count] = blocksVec[old_index].lde.contextsArray[new_count + iterated_count];
-
-            blocksVec[new_index].resize(new_count, blocksVec[old_index].end, blocksVec[old_index].lde.size - accumulated_length);
-            blocksVec[old_index].resize(iterated_count, blocksVec[new_index].root - last_length, accumulated_length);
-            transferUniqueChildren(old_index, new_index);
-            return new_count != original_count;
-        }
-    }
-    return true;
-}

@@ -1,8 +1,8 @@
 #include "main.h"
 #include <iostream>
 #include <windows.h>
-// Currently testing CreateProcessInternalW & CreateFileW (which is redirected intentionally through the IAT.)
 
+// Currently testing CreateProcessInternalW & CreateFileW (which is redirected intentionally through the IAT.)
 int main() { using enum FunctionTree::ErrorCode;
     HMODULE hModule = GetModuleHandleW(L"KernelBase.dll");
 
