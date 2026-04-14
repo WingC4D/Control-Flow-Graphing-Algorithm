@@ -77,8 +77,8 @@ FunctionTree::AddBlock FunctionTree::handleConditionalJump(TraceContext& Context
         case was_traced:
             break;
 
-    case no_input:
-        return no_input;
+        case no_input:
+            return no_input;
     }
     return handleJump(ConditionalContext.deep_ptr, ConditionalContext.deepIdx, Context);
 }
@@ -187,14 +187,13 @@ void FunctionTree::transferUniqueChildren(DWORD old_parent_idx, DWORD new_parent
     blocksVec[old_parent_idx].flowToVec.emplace_back(new_parent_idx);
 }
 
-
 BOOLEAN FunctionTree::moveBlockData(DWORD old_index, DWORD new_index) {
     if (!blocksVec[old_index].end)
         return false;
 
     if (blocksVec[old_index].end == blocksVec[new_index].end) {
         blocksVec[old_index].root < blocksVec[new_index].root ?
-            blocksVec[old_index].findNewEnd(blocksVec[new_index].root) :
+            blocksVec[old_index].findNewEnd(blocksVec[new_index].root):
             blocksVec[new_index].findNewEnd(blocksVec[old_index].root);
         return true;
     }
