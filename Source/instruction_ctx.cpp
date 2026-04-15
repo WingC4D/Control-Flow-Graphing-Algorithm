@@ -339,7 +339,7 @@ const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using en
         return nullptr;
 
     switch (analyseOpcodeType(analysis_address)) {
-        case conditional| _far | jump:
+        case conditional | _far | jump:
         case jump:
         case call:
             return analysis_address + length + *reinterpret_cast<const int* const>(analysis_address + getPreDisposition());
@@ -390,8 +390,8 @@ block::TraceResults Context::checkForNewBlock(const BYTE* lpReference) { using e
 }
 
 void Context::log(const BYTE *instruction_head, DWORD idx) const {
-    std::print("#{:3d} @{:P} ", idx, reinterpret_cast<const void*>(instruction_head));
+    std::print("#{:3d} @{:p} ", idx, reinterpret_cast<const void*>(instruction_head));
     for (BYTE i = 0, instruction_length = length; i < instruction_length; i++)
-        std::print("{:#04X} ", instruction_head[i]);
+        std::print("{:#04x} ", instruction_head[i]);
     std::println();
 }

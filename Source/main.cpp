@@ -9,12 +9,12 @@ int main() { using enum FunctionTree::ErrorCode;
     if (!hModule)
 		return 1;
 
-    LPVOID target_function = reinterpret_cast<LPVOID>(GetProcAddress(hModule, "CreateProcessInternalW"));
+    void* target_function = reinterpret_cast<void*>(GetProcAddress(hModule, "CreateProcessInternalW"));
 
     if (!target_function)
 		return 2;
 	
-    FunctionTree FuncTree0(reinterpret_cast<LPVOID>(&CreateFileW)),
+    FunctionTree FuncTree0(reinterpret_cast<void*>(&CreateFileW)),
                  FuncTree1(target_function);
 	
     FuncTree1.trace() == success ? FuncTree1.print() : std::println("[x] Analysis Failed!");

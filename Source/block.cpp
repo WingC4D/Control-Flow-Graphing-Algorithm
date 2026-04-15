@@ -2,7 +2,7 @@
 using namespace block;
 
 // A wrapping dispatcher around LdeState::traceBlock().
-TraceResults Block::trace(_Out_ std::vector<const BYTE*>& NewFunctionsVec) { using enum TraceResults;
+TraceResults Block::trace(std::vector<const BYTE*>& NewFunctionsVec) { using enum TraceResults;
     switch (lde.traceBlock(root, NewFunctionsVec)) {
         case reachedJump:
             end = root + lde.getLastInstHeadOffset();
@@ -26,8 +26,10 @@ TraceResults Block::trace(_Out_ std::vector<const BYTE*>& NewFunctionsVec) { usi
 
 // A loop wrapped around inst::Context::map() & inst::Context::checkForNewBlock(), looking for redirecting jumps.
 TraceResults Block::LdeState::traceBlock(const BYTE* block_root, std::vector<const BYTE*>& NewFunctionsVec) {
-    while (instruction_count < MAX_INSTRUCTIONS && status == success) {
-        status = currContext.map(block_root + size);
+    while (instruction_count < MAX_INSTRUCTIONS) {
+        if ((status = currContext.map(block_root + size)) != success && status != reached_end_of_function)
+            return failed;
+
         switch (currContext.checkForNewBlock(block_root + size)) {
             case reachedJump:
                 handleEnfOfTrace();
@@ -75,9 +77,8 @@ void Block::findNewEnd(const BYTE* interlacing_root_ptr) {
     DWORD accumulated_length = 0;
     for (BYTE last_instruction_length = 0, new_instruction_count = 0; inst::Context& Context: lde.contextsArray) {
         if (root + accumulated_length == interlacing_root_ptr) {
-            if (new_instruction_count)
+            if (accumulated_length)
                 return resize(new_instruction_count, interlacing_root_ptr - last_instruction_length, accumulated_length);
-            
         }
         last_instruction_length = Context.getLength();
         accumulated_length     += last_instruction_length;
@@ -98,17 +99,17 @@ void Block::resize(const BYTE new_instruction_count, const BYTE* new_end_address
 void Block::logIndex() const {
     if (idx & COND_MASK)
         return idx & COND_TAKEN_MASK ?
-            std::println("[i] Analyzing Branch Of Linear Index {:#06X} & Of Height: {:#04X} (Conditional Jump Taken)", idx & MAX_INDEX, height) :
-            std::println("[i] Analyzing Branch Of Linear Index {:#06X} & Of Height: {:#04X} (Conditional Jump Not Taken)", idx & MAX_INDEX, height);
+            std::println("[i] Analyzing Block Of Linear Index {:#06x} & Of Height: {:#04x} (Conditional Jump Taken)", idx & MAX_INDEX, height) :
+            std::println("[i] Analyzing Block Of Linear Index {:#06x} & Of Height: {:#04x} (Conditional Jump Not Taken)", idx & MAX_INDEX, height);
 
     return height ?
-        std::println("[!] Analyzing Branch Of Linear Index {:#06X} & Of Height: {:#04X} (Non Conditional)", idx & MAX_INDEX, height) :
-        std::println("[!] Analyzing Root Branch (Non Conditional)");
+        std::println("[!] Analyzing Block Of Linear Index {:#06x} & Of Height: {:#04x} (Non-Conditional)", idx & MAX_INDEX, height) :
+        std::println("[!] Analyzing The Root Block (Non-Conditional)");
 }
 
 void Block::logInstructionBytesAndAddresses() const {
     if (!end) {
-        std::println("[!] This Branch Is Not Traced Yet.");
+        std::println("[!] This block is empty.");
         return;
     }
     for (DWORD accumulated_length = 0, instruction_count = 0; inst::Context Context : lde.contextsArray) {
@@ -123,14 +124,15 @@ void Block::logInstructionBytesAndAddresses() const {
     std::println();
 }
 
+
 void Block::logFromAndToVectors() const {
     if (!flowFromVec.empty()) {
         std::print("[i] This block flows from: ");
         QWORD parent = 0,
               size   = flowFromVec.size() - 1;
         for (;  parent < size; parent++)
-            std::print("{:#06X}, ", flowFromVec[parent]);
-        std::println("{:#06X}", flowFromVec[parent]);
+            std::print("{:#05x}, ", flowFromVec[parent]);
+        std::println("{:#05x}", flowFromVec[parent]);
     } else {
         std::println("[i] This is a root block.");
     }
@@ -139,8 +141,8 @@ void Block::logFromAndToVectors() const {
         QWORD child = 0,
             size = flowToVec.size() - 1;
         for (; child < size; child++)
-            std::print("{:#06X}, ", flowToVec[child]);
-        std::println("{:#06X}", flowToVec[child]);
+            std::print("{:#05x}, ", flowToVec[child]);
+        std::println("{:#05x}", flowToVec[child]);
     } else {
         std::println("[i] This is a leaf block.");
     }
