@@ -70,17 +70,17 @@ Context::Status Context::map(const BYTE * const analysis_address) { using enum F
             return increaseLength(rex_w ? SIZE_OF_QWORD : SIZE_OF_DWORD) ? success :instruction_overflow;
 
         case prefix:
-            if (!incrementPrefixCount()) 
-                return prefix_overflow;
-            
-            if (!incrementLength()) 
-                return instruction_overflow;
-            
             if ((*analysis_address & prefixes::REX_MASK) == prefixes::REX_BASE)
                 rex_w = true;
 
             else if (!prefix_count && *analysis_address == prefixes::SHORT)
                 shortened = true;
+
+            if (!incrementPrefixCount()) 
+                return prefix_overflow;
+            
+            if (!incrementLength()) 
+                return instruction_overflow;
 
             return map(analysis_address + 1);
         
@@ -248,7 +248,7 @@ Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using
             if ((preceding_byte_ptr[1] & REG_MASK) < 0x10)
                 return increaseLength(shortened ? SIZE_OF_WORD : SIZE_OF_DWORD) ? success : instruction_overflow;
 
-            return  success ;
+            return success;
 
         case MOD01:
             if (success != analyseRM4(preceding_byte_ptr, SIZE_OF_BYTE))
