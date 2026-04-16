@@ -3,7 +3,7 @@
 FunctionTree::ErrorCode FunctionTree::trace() { using namespace block;
     TraceContext Context(root);
     while (!Context.explorationVec.empty() && Context.blocksCount < MAX_INDEX) {
-        Context.currIndex  = Context.explorationVec.back();
+        Context.currIndex = Context.explorationVec.back();
         Context.explorationVec.pop_back();
 
         if (blocksVec[Context.currIndex].end)
@@ -20,11 +20,10 @@ FunctionTree::ErrorCode FunctionTree::trace() { using namespace block;
                     return ErrorCode::failed;
                 break;
 
-            case reachedConditionalJump: {
+            case reachedConditionalJump: 
                 if (no_input == handleConditionalJump(Context))
                     return ErrorCode::failed;
                 break;
-            }
 
             case reachedReturn:
                 leavesVec.emplace_back(Context.currIndex);

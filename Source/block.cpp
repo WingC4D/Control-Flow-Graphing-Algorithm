@@ -29,7 +29,6 @@ TraceResults Block::LdeState::traceBlock(const BYTE* block_root, std::vector<con
     while (instruction_count < MAX_INSTRUCTIONS) {
         if ((status = currContext.map(block_root + size)) != success && status != reached_end_of_function)
             return failed;
-
         switch (currContext.checkForNewBlock(block_root + size)) {
             case reachedJump:
                 handleEnfOfTrace();
@@ -79,6 +78,7 @@ void Block::findNewEnd(const BYTE* interlacing_root_ptr) {
         if (root + accumulated_length == interlacing_root_ptr) {
             if (accumulated_length)
                 return resize(new_instruction_count, interlacing_root_ptr - last_instruction_length, accumulated_length);
+            return;
         }
         last_instruction_length = Context.getLength();
         accumulated_length     += last_instruction_length;
@@ -103,8 +103,8 @@ void Block::logIndex() const {
             std::println("[i] Analyzing Block Of Linear Index {:#06x} & Of Height: {:#04x} (Conditional Jump Not Taken)", idx & MAX_INDEX, height);
 
     return height ?
-        std::println("[!] Analyzing Block Of Linear Index {:#06x} & Of Height: {:#04x} (Non-Conditional)", idx & MAX_INDEX, height) :
-        std::println("[!] Analyzing The Root Block (Non-Conditional)");
+        std::println("[i] Analyzing Block Of Linear Index {:#06x} & Of Height: {:#04x} (Non-Conditional)", idx & MAX_INDEX, height) :
+        std::println("[i] Analyzing The Root Block (Non-Conditional)");
 }
 
 void Block::logInstructionBytesAndAddresses() const {
@@ -123,7 +123,6 @@ void Block::logInstructionBytesAndAddresses() const {
     }
     std::println();
 }
-
 
 void Block::logFromAndToVectors() const {
     if (!flowFromVec.empty()) {
