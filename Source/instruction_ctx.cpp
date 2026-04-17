@@ -328,8 +328,10 @@ WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using nam
                     return unknown;
             }
         default:
-            if ((*analysis_address & 0xF0) == 0x70 || (*analysis_address & 0xFC) == 0xE0)
+            if ((*analysis_address & 0xF0) == 0x70 || (*analysis_address & 0xFC) == 0xE0) {
+                rip_relative = true;
                 return conditional | jump;
+            }
         return unknown;
     }
 }

@@ -127,23 +127,23 @@ void Block::logInstructionBytesAndAddresses() const {
 void Block::logFromAndToVectors() const {
     if (!flowFromVec.empty()) {
         std::print("[i] This block flows from: ");
-        QWORD parent = 0,
-              size   = flowFromVec.size() - 1;
-        for (;  parent < size; parent++)
+        QWORD parent = 0;
+        for (QWORD size = flowFromVec.size() - 1;  parent < size; parent++) {
             std::print("{:#05x}, ", flowFromVec[parent]);
+        }
         std::println("{:#05x}", flowFromVec[parent]);
-    } else {
+    } else 
         std::println("[i] This is a root block.");
-    }
+    
     if (!flowToVec.empty()) {
         std::print("[i] this block flows to:   ");
-        QWORD child = 0,
-            size = flowToVec.size() - 1;
-        for (; child < size; child++)
+        QWORD child = 0;
+        for (QWORD size = flowToVec.size() - 1; child < size; child++) {
             std::print("{:#05x}, ", flowToVec[child]);
+        }
         std::println("{:#05x}", flowToVec[child]);
-    } else {
+    } else 
         std::println("[i] This is a leaf block.");
-    }
+
     std::println();
 }

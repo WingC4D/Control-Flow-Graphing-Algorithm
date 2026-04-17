@@ -14,6 +14,7 @@ namespace block {
 
 struct Block {
     struct LdeState: LdeCommon {
+        DWORD                      size = 0;
         std::vector<inst::Context> contextsArray;
 
         LdeState(): contextsArray(block::MAX_INSTRUCTIONS) {}
