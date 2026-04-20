@@ -1,15 +1,7 @@
 #pragma once
 #include <print>
+#include "independent_types.h"
 
-#ifndef WIN32
-    using BYTE    = unsigned char;
-    using WORD    = unsigned short;
-    using DWORD   = unsigned long;
-    using BOOLEAN = BYTE;
-    using VOID    = void;
-    using LPVOID  = VOID*;
-#endif
-using QWORD   = unsigned long long ;
 
 namespace block {
     enum TraceResults: BYTE {
@@ -25,7 +17,7 @@ namespace block {
 
 namespace inst {
     namespace prefixes {
-        constexpr BYTE REX_BASE = 0x48,
+        inline constexpr BYTE REX_BASE = 0x48,
                        SHORT    = 0x66,
                        REX_MASK = 0xF8;
     }
@@ -70,7 +62,7 @@ namespace inst {
 	    	unknown			  = 0xFFFF
 	    };
 
-        constexpr BYTE CALL       = 0xE8,
+        inline constexpr BYTE CALL       = 0xE8,
                        JUMP       = 0xE9,
                        SHORT_JUMP = 0xEB,
                        RETURN_FAR = 0xC2,
@@ -78,7 +70,7 @@ namespace inst {
     }
 
     namespace mod_rm {
-        constexpr BYTE RM_MASK  = 0x07,
+        inline constexpr BYTE RM_MASK  = 0x07,
                        REG_MASK = 0x38,
                        MOD_MASK = 0xC0,
                        MOD11    = 0xC0,
@@ -86,7 +78,7 @@ namespace inst {
                        MOD01    = 0x40;
     }
 
-    constexpr BYTE SIZE_OF_BYTE  = 0x01,
+    inline constexpr BYTE SIZE_OF_BYTE  = 0x01,
                    SIZE_OF_WORD  = 0x02,
                    SIZE_OF_DWORD = 0x04,
                    SIZE_OF_QWORD = 0x08;
@@ -103,7 +95,7 @@ namespace inst {
 		imm_eight_bytes = 0x80
 	};
 
-    constexpr BYTE MAX_OPCODE_SIZE = 0x04,
+    inline constexpr BYTE MAX_OPCODE_SIZE = 0x04,
 				   MAX_PREFIXES    = 0x0E,
 				   MAX_SIZE        = 0x0F;
 
@@ -266,7 +258,7 @@ namespace inst {
         has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm | prefix,
 		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
 		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
-		has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
+		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
 		prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix,
 		none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none,
 		none, none, prefix, has_mod_rm, prefix, prefix, prefix, prefix, imm_four_bytes, has_mod_rm | imm_eight_bytes | imm_four_bytes, imm_one_byte, has_mod_rm | imm_one_byte, none, none, none, none,
