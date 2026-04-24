@@ -114,16 +114,16 @@ FunctionTree::AddBlock FunctionTree::handleJump(const BYTE* resolved_address, co
 }
 
 FunctionTree::AddBlock FunctionTree::addBlock(const BYTE* address_to_add, const DWORD index, TraceContext& Context) {
-    if (Context.rootsMap.contains(address_to_add)) 
+    if (Context.rootsMap.contains(address_to_add)) {
         return was_traced;
-
+    }
     auto UpperBound = Context.rootsMap.upper_bound(address_to_add);
     if (UpperBound != Context.rootsMap.begin()) {
-        if (blocksVec[(--UpperBound)->second].isInRange(address_to_add))
+        if (blocksVec[(--UpperBound)->second].isInRange(address_to_add)) {
             if (splitBlock(UpperBound->second, address_to_add, Context))
                 return split;
+        }
     }
-
     blocksVec.emplace_back(address_to_add, Context.currIndex, index, blocksVec[Context.currIndex].height + 1);
     return added;
 }
@@ -131,11 +131,9 @@ FunctionTree::AddBlock FunctionTree::addBlock(const BYTE* address_to_add, const 
 BOOLEAN FunctionTree::splitBlock(DWORD to_split_idx, const BYTE* splitting_address, TraceContext& TraceCtx) {
     if (!splitting_address)
         return false;
-
     BYTE original_count = blocksVec[to_split_idx].lde.instruction_count,
          iterated_count = 0,
          new_count      = 0;
-
     for (DWORD last_length = 0, accumulated_length = 0; const inst::Context& Context: blocksVec[to_split_idx].lde.contextsArray) {
         if (blocksVec[to_split_idx].root + accumulated_length != splitting_address || !accumulated_length) {
             iterated_count++;
@@ -145,19 +143,18 @@ BOOLEAN FunctionTree::splitBlock(DWORD to_split_idx, const BYTE* splitting_addre
         }
         blocksVec.emplace_back(splitting_address, to_split_idx, TraceCtx.blocksCount, blocksVec[to_split_idx].height + 1);
         blocksVec[TraceCtx.currIndex].flowToVec.emplace_back(TraceCtx.blocksCount);
-        if (TraceCtx.currIndex != to_split_idx)
+        if (TraceCtx.currIndex != to_split_idx) {
             blocksVec[TraceCtx.blocksCount].addUniqueParent(TraceCtx.currIndex);
-
-        for (; iterated_count + new_count < original_count; new_count++)
+        }
+        for (; iterated_count + new_count < original_count; new_count++) {
             blocksVec.back().lde.contextsArray[new_count] = blocksVec[to_split_idx].lde.contextsArray[new_count + iterated_count];
-
+        }
         TraceCtx.rootsMap[splitting_address] = TraceCtx.blocksCount;
         blocksVec.back().resize(new_count, blocksVec[to_split_idx].end, blocksVec[to_split_idx].lde.size - accumulated_length);
         blocksVec[to_split_idx].resize(iterated_count, splitting_address - last_length, accumulated_length);
         if (TraceCtx.currIndex == to_split_idx) {
             TraceCtx.currIndex = TraceCtx.blocksCount;
             to_split_idx = TraceCtx.blocksCount;
-
         }
         transferUniqueChildren(to_split_idx, TraceCtx.blocksCount);
         if (blocksVec[TraceCtx.blocksCount].root < blocksVec[to_split_idx].root)

@@ -1,5 +1,5 @@
+#pragma once
 #include <print>
-
 #ifndef WIN32
     using BYTE    = unsigned char;
     using WORD    = unsigned short;
