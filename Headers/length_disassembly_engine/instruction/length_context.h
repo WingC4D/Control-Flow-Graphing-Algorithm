@@ -220,7 +220,7 @@ namespace inst {
 
         void log(const BYTE* instruction_head, DWORD idx) const;
 
-        block::TraceResults checkForNewBlock(const BYTE* lpReference);
+        block::TraceResults checkForNewBlock(const BYTE* analysis_address);
 
     private:
         WORD   opcode_length : 2 = 0,
