@@ -1,7 +1,14 @@
-#pragma once
 #include <print>
-#include "independent_types.h"
 
+#ifndef WIN32
+    using BYTE    = unsigned char;
+    using WORD    = unsigned short;
+    using DWORD   = unsigned long;
+    using BOOLEAN = BYTE;
+    using VOID    = void;
+    using LPVOID  = VOID*;
+#endif
+using QWORD   = unsigned long long ;
 
 namespace block {
     enum TraceResults: BYTE {
@@ -17,7 +24,7 @@ namespace block {
 
 namespace inst {
     namespace prefixes {
-        inline constexpr BYTE REX_BASE = 0x48,
+        constexpr BYTE REX_BASE = 0x48,
                        SHORT    = 0x66,
                        REX_MASK = 0xF8;
     }
@@ -62,7 +69,7 @@ namespace inst {
 	    	unknown			  = 0xFFFF
 	    };
 
-        inline constexpr BYTE CALL       = 0xE8,
+        constexpr BYTE CALL       = 0xE8,
                        JUMP       = 0xE9,
                        SHORT_JUMP = 0xEB,
                        RETURN_FAR = 0xC2,
@@ -70,7 +77,7 @@ namespace inst {
     }
 
     namespace mod_rm {
-        inline constexpr BYTE RM_MASK  = 0x07,
+        constexpr BYTE RM_MASK  = 0x07,
                        REG_MASK = 0x38,
                        MOD_MASK = 0xC0,
                        MOD11    = 0xC0,
@@ -78,7 +85,7 @@ namespace inst {
                        MOD01    = 0x40;
     }
 
-    inline constexpr BYTE SIZE_OF_BYTE  = 0x01,
+    constexpr BYTE SIZE_OF_BYTE  = 0x01,
                    SIZE_OF_WORD  = 0x02,
                    SIZE_OF_DWORD = 0x04,
                    SIZE_OF_QWORD = 0x08;
@@ -95,7 +102,7 @@ namespace inst {
 		imm_eight_bytes = 0x80
 	};
 
-    inline constexpr BYTE MAX_OPCODE_SIZE = 0x04,
+    constexpr BYTE MAX_OPCODE_SIZE = 0x04,
 				   MAX_PREFIXES    = 0x0E,
 				   MAX_SIZE        = 0x0F;
 
@@ -228,7 +235,8 @@ namespace inst {
                analyseSpecialGroup(const BYTE* preceding_byte_ptr),
                analyseGroup3(const BYTE* analysis_address),
                analyseF6(const BYTE* preceding_byte_ptr),
-               analyseF7(const BYTE* preceding_byte_ptr);
+               analyseF7(const BYTE* preceding_byte_ptr),
+               analyseAVX(const BYTE* analysis_address);
 
         Status analyseRM4(const BYTE* preceding_byte_ptr, const BYTE to_add) {
             if ((preceding_byte_ptr[1] & mod_rm::RM_MASK) != 4)  
@@ -255,11 +263,11 @@ namespace inst {
 	};
 
     inline BYTE results[256] {
-        has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm | prefix,
-		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
-		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
-		has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
-		prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix,
+    /*0*/    has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm | prefix,
+	/*1*/	has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
+	/*2*/	has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, prefix, has_mod_rm,
+	/*3*/	has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
+	/*4*/	prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix,
 		none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none,
 		none, none, prefix, has_mod_rm, prefix, prefix, prefix, prefix, imm_four_bytes, has_mod_rm | imm_eight_bytes | imm_four_bytes, imm_one_byte, has_mod_rm | imm_one_byte, none, none, none, none,
 		imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte,
@@ -267,7 +275,7 @@ namespace inst {
 		none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none,
   /*A*/ imm_eight_bytes, imm_eight_bytes, imm_eight_bytes, imm_eight_bytes, none, none, none, none, imm_one_byte, imm_eight_bytes | imm_four_bytes, none, none, none, none, none, none,
         imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes,
-        has_mod_rm | imm_one_byte, has_mod_rm | imm_one_byte, imm_two_bytes, none, has_mod_rm, has_mod_rm, has_mod_rm | imm_one_byte, has_mod_rm | imm_four_bytes, imm_two_bytes | imm_one_byte, none, imm_two_bytes, none, none, imm_one_byte, none, none,
+        has_mod_rm | imm_one_byte, has_mod_rm | imm_one_byte, imm_two_bytes, none, has_mod_rm | special | prefix, has_mod_rm | special | prefix, has_mod_rm | imm_one_byte, has_mod_rm | imm_four_bytes, imm_two_bytes | imm_one_byte, none, imm_two_bytes, none, none, imm_one_byte, none, none,
         has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm,
         imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, none, none, none, none, imm_eight_bytes | imm_four_bytes, imm_eight_bytes | imm_four_bytes, none, imm_one_byte, none, none, none, none,
         prefix, none, prefix, prefix, none, none, has_mod_rm | special, has_mod_rm | special, none, none, none, none, none, none, has_mod_rm, has_mod_rm

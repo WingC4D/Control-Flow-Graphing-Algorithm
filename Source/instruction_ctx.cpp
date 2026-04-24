@@ -1,4 +1,4 @@
-#include "instruction_ctx.h"
+#include "../Headers/instruction_ctx.h"
 
 using namespace inst;
 
@@ -22,6 +22,9 @@ Context::Status Context::map(const BYTE * const analysis_address) { using enum F
 
         case has_mod_rm | special:
             return analyseGroup3(analysis_address);
+
+        case has_mod_rm | special | prefix:
+            return analyseAVX(analysis_address);
 
         case has_mod_rm | imm_one_byte:
             if (!incrementLength())
@@ -129,6 +132,19 @@ Context::Status Context::analyseModRM(const BYTE* const preceding_byte_ptr) { us
     }
 }
 
+Context::Status Context::analyseAVX(const BYTE * const analysis_address) {
+    if (!incrementLength())
+        return instruction_overflow;
+
+    if (!incrementPrefixCount())
+        return prefix_overflow;
+    if (*analysis_address == 0xC5) {
+        return analyseSpecialGroup(analysis_address + 1);
+    }
+
+    return Context::Status::wrong_input;
+}
+
 Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_ptr) {
     if (!preceding_byte_ptr) 
         return no_input;
@@ -177,13 +193,10 @@ Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_pt
 }
 
 Context::Status Context::analyseGroup3(const BYTE* const analysis_address) {
-    if (!analysis_address)
-        return no_input;
-
     if (!incrementLength())
         return instruction_overflow;
 
-    if (!incrementOpcode())
+    if (!incrementPrefixCount())
         return opcode_overflow;
 
     switch (*analysis_address) {
@@ -234,9 +247,11 @@ Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) { using
 }
 
 Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using namespace mod_rm;
+    //if (preceding_byte_ptr[1] == 0xd1)
+        //std::println();
     switch (preceding_byte_ptr[1] & MOD_MASK) {
         case MOD11:
-            return analyseRegBits(preceding_byte_ptr, SIZE_OF_BYTE);
+            return analyseRegBits(preceding_byte_ptr, SIZE_OF_DWORD);
 
         case MOD10:
             if (!increaseLength(SIZE_OF_DWORD))
