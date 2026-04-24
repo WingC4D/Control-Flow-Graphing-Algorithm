@@ -5,10 +5,6 @@ FunctionTree::ErrorCode FunctionTree::trace() { using namespace block;
     while (!Context.explorationVec.empty() && Context.blocksCount < MAX_INDEX) {
         Context.currIndex = Context.explorationVec.back();
         Context.explorationVec.pop_back();
-
-        if (Context.currIndex == 0x1f)
-            std::print("");
-
         if (blocksVec[Context.currIndex].end)
             continue;
 
@@ -33,7 +29,7 @@ FunctionTree::ErrorCode FunctionTree::trace() { using namespace block;
                 break;
 
             case reachedCall:
-            case TraceResults::failed:
+            case failed:
             case noNewBlock:
                 return ErrorCode::failed;
         }
@@ -103,7 +99,6 @@ FunctionTree::AddBlock FunctionTree::handleJump(const BYTE* resolved_address, co
             return was_traced;
 
         case split:
-
             Context.blocksCount++;
             return split;
 
@@ -147,7 +142,7 @@ BOOLEAN FunctionTree::splitBlock(DWORD to_split_idx, const BYTE* splitting_addre
             blocksVec[TraceCtx.blocksCount].addUniqueParent(TraceCtx.currIndex);
         }
         for (; iterated_count + new_count < original_count; new_count++) {
-            blocksVec.back().lde.contextsArray[new_count] = blocksVec[to_split_idx].lde.contextsArray[new_count + iterated_count];
+            blocksVec.back().lde.contextsArray[new_count] = blocksVec[to_split_idx].lde.contextsArray[static_cast<BYTE>(new_count + iterated_count)];
         }
         TraceCtx.rootsMap[splitting_address] = TraceCtx.blocksCount;
         blocksVec.back().resize(new_count, blocksVec[to_split_idx].end, blocksVec[to_split_idx].lde.size - accumulated_length);

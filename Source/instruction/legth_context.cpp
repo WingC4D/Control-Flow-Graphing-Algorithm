@@ -1,5 +1,4 @@
 #include "length_disassembly_engine/instruction/length_context.h"
-
 using namespace inst;
 
 //Main instruction decoding dispatcher.
@@ -142,7 +141,7 @@ Context::Status Context::analyseAVX(const BYTE * const analysis_address) {
         return analyseSpecialGroup(analysis_address + 1);
     }
 
-    return Context::Status::wrong_input;
+    return wrong_input;
 }
 
 Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_ptr) {
@@ -247,8 +246,6 @@ Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) { using
 }
 
 Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using namespace mod_rm;
-    //if (preceding_byte_ptr[1] == 0xd1)
-        //std::println();
     switch (preceding_byte_ptr[1] & MOD_MASK) {
         case MOD11:
             return analyseRegBits(preceding_byte_ptr, SIZE_OF_DWORD);
