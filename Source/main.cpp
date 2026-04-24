@@ -2,6 +2,7 @@
 
 // Currently testing CreateProcessInternalW & CreateFileW (which is redirected intentionally through the IAT.)
 int main() { using enum FunctionTree::ErrorCode;
+    
     HMODULE hModule = GetModuleHandleW(L"KernelBase.dll");
 
     if (!hModule)

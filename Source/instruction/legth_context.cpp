@@ -109,7 +109,6 @@ Context::Status Context::analyseModRM(const BYTE* const preceding_byte_ptr) { us
             }
             if ((preceding_byte_ptr[1] & RM_MASK) != 5) 
                 return success;
-
             rip_relative = true;
             return increaseLength(SIZE_OF_DWORD) ? success : instruction_overflow;
     }
@@ -129,13 +128,10 @@ Context::Status Context::analyseAVX(const BYTE * const analysis_address) {
 Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_ptr) {
     if (!preceding_byte_ptr) 
         return no_input;
-
     if (!incrementLength())
         return instruction_overflow;
-
     if (!incrementOpcode())
         return opcode_overflow;
-
     switch (preceding_byte_ptr[1]) {
         case 0x05:
         case 0x06:
@@ -159,10 +155,8 @@ Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_pt
         case 0xBA:
             if (!incrementOpcode())
                 return opcode_overflow;
-
             if (!incrementLength())
                 return instruction_overflow;
-
             break;
 
         default:
@@ -176,17 +170,13 @@ Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_pt
 Context::Status Context::analyseGroup3(const BYTE* const analysis_address) {
     if (!incrementLength())
         return instruction_overflow;
-
     if (!incrementPrefixCount())
         return opcode_overflow;
-
     switch (*analysis_address) {
         case 0xF6:
             return analyseF6(analysis_address);
-
         case 0xF7:
             return analyseF7(analysis_address);
-
         default:
             return wrong_input;
     }
@@ -212,6 +202,8 @@ Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) { using
             return incrementLength() ? success : instruction_overflow;
 
         default:
+            if (!incrementLength())
+                return instruction_overflow;
             if (success != analyseRM4nSIB(preceding_byte_ptr, SIZE_OF_BYTE, SIZE_OF_DWORD))
                 return instruction_overflow;
             if ((preceding_byte_ptr[1] & RM_MASK) != 5) 
