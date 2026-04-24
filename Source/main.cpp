@@ -1,6 +1,4 @@
 #include "main.h"
-#include <iostream>
-#include <windows.h>
 
 // Currently testing CreateProcessInternalW & CreateFileW (which is redirected intentionally through the IAT.)
 int main() { using enum FunctionTree::ErrorCode;

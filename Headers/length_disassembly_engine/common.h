@@ -1,5 +1,5 @@
 #pragma once
-#include "instruction_ctx.h"
+#include "instruction/length_context.h"
 
 struct LdeCommon { using enum inst::Context::Status;
     inst::Context         currContext;

@@ -4,26 +4,24 @@
 constexpr WORD  BASE_BLOCK_RESERVE_SIZE = 0x0400,
                 NEW_FUNCTIONS_BASE_SIZE = 0x0004;
 
-
-
 struct ConditionalJumpCtx {
     const BYTE* shallow_ptr,
               * deep_ptr;
 	DWORD	    shallowIdx,
 			    deepIdx;
 
-    ConditionalJumpCtx(const BYTE* resolved_address, const BYTE*next_address, DWORD current_block_count) {
+    ConditionalJumpCtx(const BYTE* resolved_address, const BYTE* next_address, DWORD current_block_count) { using namespace block;
         if (next_address < resolved_address) {
             shallow_ptr = next_address;
             deep_ptr    = resolved_address;
-            shallowIdx  = current_block_count | block::COND_MASK;
-            deepIdx     = current_block_count | block::COND_MASK | block::COND_TAKEN_MASK;
+            shallowIdx  = current_block_count | COND_MASK;
+            deepIdx     = current_block_count | COND_MASK | COND_TAKEN_MASK;
             return;
         }
         shallow_ptr = resolved_address ;
         deep_ptr    = next_address;
-        shallowIdx  = current_block_count | block::COND_MASK | block::COND_TAKEN_MASK;
-        deepIdx     = current_block_count | block::COND_MASK;
+        shallowIdx  = current_block_count | COND_MASK | COND_TAKEN_MASK;
+        deepIdx     = current_block_count | COND_MASK;
     }
 };
 

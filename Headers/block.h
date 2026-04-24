@@ -1,6 +1,6 @@
 #pragma once
 #include <vector>
-#include "lde_common.h"
+#include "length_disassembly_engine/common.h"
 
 namespace block {
     constexpr BYTE  MAX_INSTRUCTIONS = 0xA0;
