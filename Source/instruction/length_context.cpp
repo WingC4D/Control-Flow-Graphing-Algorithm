@@ -7,9 +7,16 @@ Context::Status Context::map(const BYTE * const analysis_address) { using enum F
         return no_input;
     if (!setLength(getPreDisposition()))
         return instruction_overflow;
+/*
+    if (analysis_address == reinterpret_cast<void*>(0x7FF9E0924CA0))
+        std::print("");
+*/  
     switch (results[*analysis_address]) {
         case none:
-            return *analysis_address == opcodes::RETURN || *analysis_address == opcodes::RETURN_FAR ? reached_end_of_function : success;
+            if (*analysis_address == 0xCC)
+                if (*reinterpret_cast<const DWORD*>(analysis_address) == 0xCCCCCCCC)
+                    return reached_end_of_function;
+            return *analysis_address == opcodes::RETURN || *analysis_address == opcodes::RETURN_FAR || *reinterpret_cast<const WORD*>(analysis_address) == 0xe0ff ? reached_end_of_function : success;
 
         case has_mod_rm:
             return analyseModRM(analysis_address);
@@ -43,6 +50,11 @@ Context::Status Context::map(const BYTE * const analysis_address) { using enum F
                 return instruction_overflow;
             return analyseModRM(analysis_address);
 
+        case has_mod_rm | imm_two_bytes | imm_four_bytes:
+            if (!increaseLength(shortened ? SIZE_OF_WORD : SIZE_OF_DWORD))
+                return instruction_overflow;
+            return analyseModRM(analysis_address);
+
         case has_mod_rm | imm_eight_bytes | imm_four_bytes:
             std::println("[x] You don't handle yet has_mod_rm | imm_eight_bytes | imm_four_bytes, (Found @{:p})", reinterpret_cast<const void*>(analysis_address));
             return wrong_input;
@@ -58,6 +70,15 @@ Context::Status Context::map(const BYTE * const analysis_address) { using enum F
 
         case imm_eight_bytes:
             return increaseLength(SIZE_OF_QWORD) ? success : instruction_overflow;
+
+        case imm_two_bytes | imm_four_bytes | imm_eight_bytes:
+            if (shortened)
+                return increaseLength(SIZE_OF_WORD) ? success : instruction_overflow;
+
+            if (rex_w)
+                return increaseLength(SIZE_OF_QWORD) ? success : instruction_overflow;
+            
+            return increaseLength(SIZE_OF_DWORD) ? success : instruction_overflow;
 
         case imm_four_bytes | imm_eight_bytes:
             if (*analysis_address == opcodes::CALL || *analysis_address == opcodes::JUMP)
@@ -86,8 +107,10 @@ Context::Status Context::analyseModRM(const BYTE* const preceding_byte_ptr) { us
         return no_input;
     if (!incrementOpcode())  
         return opcode_overflow;
+    
     if (!incrementLength())  
         return instruction_overflow;
+    
     switch (preceding_byte_ptr[1] & MOD_MASK) {
         case MOD11:
             return success;
@@ -117,42 +140,44 @@ Context::Status Context::analyseModRM(const BYTE* const preceding_byte_ptr) { us
 Context::Status Context::analyseAVX(const BYTE * const analysis_address) {
     if (!incrementLength())
         return instruction_overflow;
-    if (!incrementPrefixCount())
+    if (!incrementOpcode())
         return prefix_overflow;
-    if (*analysis_address == 0xC5) {
-        return analyseSpecialGroup(analysis_address + 1);
-    }
+    
+    if (*analysis_address == 0xC5) 
+        return analyseLDS(analysis_address + 1);
+    
+    if (*analysis_address == 0xC4)
+        return analyseLES(analysis_address + 1);
+    
     return wrong_input;
 }
 
 Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_ptr) {
     if (!preceding_byte_ptr) 
         return no_input;
+    
     if (!incrementLength())
         return instruction_overflow;
+    
     if (!incrementOpcode())
         return opcode_overflow;
-    switch (preceding_byte_ptr[1]) {
-        case 0x05:
-        case 0x06:
-        case 0x07:
-        case 0x08:
-        case 0x09:
-        case 0x30:
-        case 0x31:
-        case 0x32:
-        case 0x34:
-        case 0x35:
-        case 0x77:
-        case 0xA2:
-        case 0x0B:
+    BYTE idx = 1;
+    switch (preceding_byte_ptr[idx]) {
+        case 0x05: case 0x06: case 0x07: case 0x08: case 0x09:
+        case 0x30: case 0x31: case 0x32: case 0x34: case 0x35:
+        case 0x77: case 0xA2: case 0x0B: case 0xC8: case 0xC9:
+        case 0xCA: case 0xCB: case 0xCC: case 0xCD: case 0xCF:
             return success;
 
         case 0x38:
             break;
-
+        
         case 0x3A:
-        case 0xBA:
+            if (!incrementLength())
+                return instruction_overflow;
+            idx++;
+        case 0x70: case 0x71: case 0x72: case 0x73: 
+        case 0xA4: case 0xBA: case 0xC4: case 0xC5: case 0xC6:
             if (!incrementOpcode())
                 return opcode_overflow;
             if (!incrementLength())
@@ -160,39 +185,47 @@ Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_pt
             break;
 
         default:
-            if ((preceding_byte_ptr[1] & 0xF0) != 0x80)
+            if ((preceding_byte_ptr[idx] & 0xF0) != 0x80)
                 break;
             return increaseLength(SIZE_OF_DWORD) ? success : instruction_overflow;
     }
-    return analyseModRM(1 + preceding_byte_ptr);
+    return analyseModRM(idx + preceding_byte_ptr);
 }
 
 Context::Status Context::analyseGroup3(const BYTE* const analysis_address) {
     if (!incrementLength())
         return instruction_overflow;
+    
     if (!incrementPrefixCount())
         return opcode_overflow;
+    
     switch (*analysis_address) {
         case 0xF6:
             return analyseF6(analysis_address);
+        
         case 0xF7:
             return analyseF7(analysis_address);
+        
         default:
             return wrong_input;
     }
 }
 
 Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) { using namespace mod_rm;
+/*
+    if (preceding_byte_ptr == reinterpret_cast<BYTE*>(0x7ff9e083dcc1))
+        std::print("");
+*/
     switch (preceding_byte_ptr[1] & MOD_MASK) {
         case MOD11:
             return analyseRegBits(preceding_byte_ptr, SIZE_OF_BYTE);
 
         case MOD10:
-            if (success != analyseRM4(preceding_byte_ptr, SIZE_OF_DWORD))
+            if (success != analyseRM4(preceding_byte_ptr, SIZE_OF_BYTE))
                 return instruction_overflow;
             if (success != analyseRegBits(preceding_byte_ptr, SIZE_OF_BYTE))
                 return instruction_overflow;
-            return incrementLength() ? success : instruction_overflow;
+            return increaseLength(SIZE_OF_DWORD) ? success : instruction_overflow;
 
         case MOD01:
             if (success != analyseRM4(preceding_byte_ptr, SIZE_OF_BYTE))
@@ -209,14 +242,18 @@ Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) { using
             if ((preceding_byte_ptr[1] & RM_MASK) != 5) 
                 return success;
             setRipRelative();
-            return incrementLength() ? success : instruction_overflow;
+            return increaseLength(SIZE_OF_DWORD) ? success : instruction_overflow;
     }
 }
 
 Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using namespace mod_rm;
+    /*
+     *if (reinterpret_cast<QWORD>(preceding_byte_ptr) == 0x7ff9e081a69B)
+     *  std::print("");
+     */
     switch (preceding_byte_ptr[1] & MOD_MASK) {
         case MOD11:
-            return analyseRegBits(preceding_byte_ptr, SIZE_OF_DWORD);
+            return analyseRegBits(preceding_byte_ptr,shortened ? SIZE_OF_WORD : SIZE_OF_DWORD);
 
         case MOD10:
             if (!increaseLength(SIZE_OF_DWORD))
@@ -228,21 +265,36 @@ Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using
             return success;
 
         case MOD01:
-            if (success != analyseRM4(preceding_byte_ptr, SIZE_OF_BYTE))
+            if (!incrementLength())
                 return instruction_overflow;
-            if ((preceding_byte_ptr[1] & REG_MASK) > 0x10)
+            
+            if (success != analyseRM4nSIB(preceding_byte_ptr, SIZE_OF_BYTE, SIZE_OF_DWORD))
+                if (!incrementLength())
+                    return instruction_overflow;
+ 
+            if ((preceding_byte_ptr[1] & REG_MASK) >= 0x10) 
                 return success;
+            
+            
             return increaseLength(shortened ? SIZE_OF_WORD : SIZE_OF_DWORD) ? success : instruction_overflow;
 
         default:
-            return analyseRegBits(preceding_byte_ptr, SIZE_OF_DWORD);
+            if (success != analyseRM4(preceding_byte_ptr, SIZE_OF_BYTE))
+                return instruction_overflow;
+            if ((preceding_byte_ptr[1] & RM_MASK) == 5)
+                return increaseLength(SIZE_OF_DWORD) ? success : instruction_overflow;
+                
+        return analyseRegBits(preceding_byte_ptr, SIZE_OF_DWORD);
     }
 }
 
 WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using namespace opcodes;
     if (!analysis_address)
         return no_input;
-
+/*
+    if (analysis_address == reinterpret_cast<void*>(0x00007ff9e08a7119))
+        std::print("");
+*/
     switch (*analysis_address) {
         case RETURN_FAR:
             return ret | _far;
@@ -255,6 +307,8 @@ WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using nam
             return call;
 
         case JUMP:
+            if (prefix_count || opcode_length > 1)
+                return unknown;
             rip_relative = true;
             return jump;
 
@@ -279,6 +333,9 @@ WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using nam
 
         case 0xFF:
             rip_relative = true;
+            if ((analysis_address[1] & 0xFC) == 0xE0 && analysis_address[-1] != 0xf7) {
+                return indirect_reg_jump;
+            }
             switch ((analysis_address[1] & mod_rm::REG_MASK) >> 3) {
                 case 0:
                     return indirect_inc;
@@ -299,7 +356,10 @@ WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using nam
                     return unknown;
             }
         default:
-            if ((*analysis_address & 0xF0) == 0x70 || (*analysis_address & 0xFC) == 0xE0) {
+            if (*analysis_address == 0xCC)
+                if (*reinterpret_cast<const DWORD*>(analysis_address) == 0xCCCCCCCC)
+                    return ret;
+            if ((*analysis_address & 0xF0) == 0x70) {
                 rip_relative = true;
                 return conditional | jump;
             }
@@ -310,13 +370,18 @@ WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using nam
 const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using enum opcodes::Types;
     if (!analysis_address)
         return nullptr;
-
-    switch (analyseOpcodeType(analysis_address)) {
+/*    
+    if (analysis_address == reinterpret_cast<BYTE*>(0x00007FF9DDCAAEEA))
+        std::print("");
+*/
+    switch (analyseOpcodeType(analysis_address + prefix_count)) {
         case conditional | _far | jump:
         case jump:
-        case call:
+        case call: {
+            auto addr = reinterpret_cast<const int* const>(analysis_address + getPreDisposition());
+            int disposition = *addr;
             return analysis_address + length + *reinterpret_cast<const int* const>(analysis_address + getPreDisposition());
-
+        }
         case jump | _short:
         case jump | conditional:
             return analysis_address + length + *reinterpret_cast<const signed char* const>(analysis_address + getPreDisposition());
@@ -335,8 +400,8 @@ const BYTE * Context::resolveJump(const BYTE* const analysis_address) { using en
 block::TraceResults Context::checkForNewBlock(const BYTE* analysis_address) { using enum block::TraceResults;
     if (!analysis_address)
         return failed;
-
-    switch (analyseOpcodeType(analysis_address)) { using enum opcodes::Types;
+    
+    switch (analyseOpcodeType(analysis_address + prefix_count)) { using enum opcodes::Types;
 
         case conditional | _far | jump:
         case conditional |  jump:
@@ -349,13 +414,17 @@ block::TraceResults Context::checkForNewBlock(const BYTE* analysis_address) { us
             return reachedJump;
 
         case call:
-        case indirect_call:
+
         case indirect_far_call:
             return reachedCall;
 
         case ret:
         case ret | _far:
             return reachedReturn;
+        case indirect_call:
+        case indirect_reg_jump:
+            return reachedRegJump;
+
 
         default:
             return noNewBlock;

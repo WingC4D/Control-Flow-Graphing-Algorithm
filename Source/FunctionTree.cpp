@@ -5,6 +5,7 @@ FunctionTree::ErrorCode FunctionTree::trace() { using namespace block;
     while (!Context.explorationVec.empty() && Context.blocksCount < MAX_INDEX) {
         Context.currIndex = Context.explorationVec.back();
         Context.explorationVec.pop_back();
+        
         if (blocksVec[Context.currIndex].end)
             continue;
 
@@ -23,7 +24,7 @@ FunctionTree::ErrorCode FunctionTree::trace() { using namespace block;
                 if (no_input == handleConditionalJump(Context))
                     return ErrorCode::failed;
                 break;
-
+            case reachedRegJump:
             case reachedReturn:
                 leavesVec.emplace_back(Context.currIndex);
                 break;
@@ -32,6 +33,7 @@ FunctionTree::ErrorCode FunctionTree::trace() { using namespace block;
             case failed:
             case noNewBlock:
                 return ErrorCode::failed;
+            
         }
     }
     if (blocksVec.capacity() != blocksVec.size())

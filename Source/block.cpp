@@ -1,6 +1,7 @@
 #include "block.h"
 using namespace block;
 
+
 // A wrapping dispatcher around LdeState::traceBlock().
 TraceResults Block::trace(std::vector<const BYTE*>& NewFunctionsVec) { using enum TraceResults;
     switch (lde.traceBlock(root, NewFunctionsVec)) {
@@ -11,7 +12,8 @@ TraceResults Block::trace(std::vector<const BYTE*>& NewFunctionsVec) { using enu
         case reachedConditionalJump:
             end = root + lde.getLastInstHeadOffset();
             return reachedConditionalJump;
-
+        
+        case reachedRegJump:
         case reachedReturn:
             end = root + lde.getLastInstHeadOffset();
             return reachedReturn;
@@ -29,6 +31,12 @@ TraceResults Block::LdeState::traceBlock(const BYTE* block_root, std::vector<con
     while (instruction_count < MAX_INSTRUCTIONS) {
         if ((status = currContext.map(block_root + size)) != success && status != reached_end_of_function)
             return failed;
+        
+        /*Debugging helper
+        //* currContext.log(block_root + size, instruction_count);
+        if (reinterpret_cast<DWORD64>(block_root + size) == 0x00007FF9DDCAAEEA)
+            std::print("");
+        */
         switch (currContext.checkForNewBlock(block_root + size)) {
             case reachedJump:
                 handleEnfOfTrace();
@@ -37,7 +45,8 @@ TraceResults Block::LdeState::traceBlock(const BYTE* block_root, std::vector<con
             case reachedConditionalJump:
                 handleEnfOfTrace();
                 return reachedConditionalJump;
-
+            
+            case reachedRegJump:
             case reachedReturn:
                 handleEnfOfTrace();
                 return reachedReturn;
@@ -48,6 +57,8 @@ TraceResults Block::LdeState::traceBlock(const BYTE* block_root, std::vector<con
             case reachedCall:
                 addResolvedCall(NewFunctionsVec, currContext.resolveJump(block_root + size));
                 break;
+            
+            
 
             case noNewBlock:
                 break;
@@ -96,7 +107,7 @@ void Block::resize(const BYTE new_instruction_count, const BYTE* new_end_address
     lde.instruction_count = new_instruction_count;
 }
 
-void Block::logIndex() const {
+void Block::logIndex(LPCSTR function_name) const {
     if (idx & COND_MASK)
         return idx & COND_TAKEN_MASK ?
             std::println("[i] Analyzing Block Of Linear Index {:#06x} & Of Height: {:#04x} (Conditional Jump Taken)", idx & MAX_INDEX, height) :
@@ -104,7 +115,7 @@ void Block::logIndex() const {
 
     return height ?
         std::println("[i] Analyzing Block Of Linear Index {:#06x} & Of Height: {:#04x} (Non-Conditional)", idx & MAX_INDEX, height) :
-        std::println("[i] Analyzing The Root Block (Non-Conditional)");
+        std::println("[i] Analyzing {:s}'s Root Block (Non-Conditional)", function_name);
 }
 
 void Block::logInstructionBytesAndAddresses() const {
@@ -124,7 +135,7 @@ void Block::logInstructionBytesAndAddresses() const {
     std::println();
 }
 
-void Block::logFromAndToVectors() const {
+void Block::logFromAndToVectors(LPCSTR function_name) const {
     if (!flowFromVec.empty()) {
         std::print("[i] This block flows from: ");
         QWORD parent = 0;
@@ -132,8 +143,7 @@ void Block::logFromAndToVectors() const {
             std::print("{:#05x}, ", flowFromVec[parent]);
         }
         std::println("{:#05x}", flowFromVec[parent]);
-    } else 
-        std::println("[i] This is a root block.");
+    } //else std::println("[i] This the root block for {:s}.", function_name);
     
     if (!flowToVec.empty()) {
         std::print("[i] this block flows to:   ");

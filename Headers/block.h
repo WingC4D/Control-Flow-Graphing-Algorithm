@@ -1,4 +1,5 @@
 #pragma once
+#include <windows.h>
 #include <vector>
 #include "length_disassembly_engine/common.h"
 
@@ -56,11 +57,11 @@ struct Block {
         idx    = index;
         height = block_height;
     }
-    void logFromAndToVectors() const;
+    void logFromAndToVectors(LPCSTR function_name) const;
 
     void logInstructionBytesAndAddresses() const;
 
-    void logIndex() const;
+    void logIndex(LPCSTR function_name) const;
 
     void findNewEnd(const BYTE* interlacing_root_ptr);
 
