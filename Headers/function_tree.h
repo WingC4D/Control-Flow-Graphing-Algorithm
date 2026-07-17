@@ -44,12 +44,73 @@ public:
         success,
         failed
     };
-    FunctionTree(const VOID *lpFunctionRoot) : root(static_cast<const BYTE*>(lpFunctionRoot)), name(resolveName()) {
+    FunctionTree(const VOID *lpFunctionRoot) : root(static_cast<const BYTE*>(lpFunctionRoot)), 
+#ifdef _WIN32
+    name(resolveName()) 
+#endif
+    {
         blocksVec.reserve(BASE_BLOCK_RESERVE_SIZE);
         blocksVec.emplace_back(root);
         newFunctionsVec.reserve(NEW_FUNCTIONS_BASE_SIZE);
-#ifdef _WIN32
-#endif
+    }
+
+    ~FunctionTree() {
+        if (name) {
+            if (*reinterpret_cast<const DWORD*>(name) == 0x5F627553 && name[4] == '0' && name[5] == 'x') {
+                free(const_cast<void*>(reinterpret_cast<const void*>(name)));
+                name = nullptr;
+            }
+        }
+    }
+
+    FunctionTree(FunctionTree&& other) noexcept = default;
+
+    FunctionTree& operator=(FunctionTree& other) noexcept {
+        if (this == &other)
+            return *this;
+
+        if (other.name) {
+            if (*reinterpret_cast<const DWORD*>(other.name) == 0x5F627553) {
+                if (name) {
+                    if (*reinterpret_cast<const DWORD*>(name) == 0x5F627553) {
+                        free(const_cast<void*>(reinterpret_cast<const void*>(name)));
+                        name = nullptr;
+                    }
+                }
+                
+                size_t name_length = lstrlenA(other.name) + 1;
+                name = static_cast<LPCSTR>(malloc(name_length));
+                if (!name)
+                    return *this;
+                strcpy_s(const_cast<LPSTR>(name), name_length, other.name);
+                
+            }
+        }
+        name = other.name;
+        other.name = nullptr;
+        //blocksVec = other.blocksVec;
+        //newFunctionsVec = other.newFunctionsVec;
+
+        return *this;
+    }
+
+    FunctionTree& operator=(FunctionTree&& other) noexcept {
+        if (this == &other)
+            return *this;
+    
+        if (name) {
+            if (*reinterpret_cast<const DWORD*>(name) == 0x5F627553 && name[4] == '0' && name[5] == 'x') {
+                free(const_cast<void*>(reinterpret_cast<const void*>(name)));
+                name = nullptr;
+            }
+        }
+        name = other.name;
+        blocksVec = std::move(other.blocksVec);
+        newFunctionsVec = std::move(other.newFunctionsVec);
+        other.name = nullptr;
+        //other.blocksVec = { };
+        
+        return *this;
     }
 
     ErrorCode trace();

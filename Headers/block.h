@@ -4,7 +4,7 @@
 #include "length_disassembly_engine/common.h"
 
 namespace block {
-    constexpr BYTE  MAX_INSTRUCTIONS = 0xA0;
+    constexpr BYTE  MAX_INSTRUCTIONS = 0xFF;
     constexpr DWORD MAX_INDEX        = 0X3FFFFFFF,
                     COND_MASK        = 0X80000000,
                     COND_TAKEN_MASK  = 0X40000000,

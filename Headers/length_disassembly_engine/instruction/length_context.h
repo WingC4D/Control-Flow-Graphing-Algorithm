@@ -37,7 +37,8 @@ namespace inst {
             map0x0F38 = 2,
             map0x0F3A = 3
         };
-        constexpr BYTE MMMM_MAP = 0x1F;
+        constexpr BYTE MMMM_MASK = 0x1F,
+                       MM_MASK   = 0x03;
     }
 
     namespace opcodes {
@@ -271,58 +272,13 @@ namespace inst {
         }
 
         // C4
-        Status analyseLES(const BYTE* const preceding_byte_ptr) { using namespace AVX;
-            if (!incrementOpcode())
-                return opcode_overflow;
-
-            if (!increaseLength(SIZE_OF_WORD))
-                return instruction_overflow;
-
-            switch (*preceding_byte_ptr & MMMM_MAP) { using enum Maps;
-                case map0x0F38:
-                    return analyseModRM(preceding_byte_ptr + 2);
-
-                case map0x0F3A:
-                    if (!incrementLength())
-                        return instruction_overflow;
-                    
-                    return analyseModRM(preceding_byte_ptr + 2);
-                
-                case map0x0F:
-                    switch (preceding_byte_ptr[2]) {
-                        case 0x70: case 0xC2: case 0xC4: case 0xC5: case 0xC6:
-                            if (!incrementLength())
-                                return instruction_overflow;
-                        default:
-                            break;
-                    }
-                    
-                    return analyseModRM(preceding_byte_ptr + 2);
-                case wrong:
-                default:
-                    return wrong_input;
-            }
-        }
+        Status analyseLES(const BYTE* preceding_byte_ptr);
 
         // C5
-        Status analyseLDS(const BYTE* const preceding_byte_ptr) {
-            if (!incrementOpcode())
-                return opcode_overflow;
+        Status analyseLDS(const BYTE* preceding_byte_ptr);
 
-            if (!incrementLength())
-                return instruction_overflow;
-            switch (preceding_byte_ptr[1]) {
-                case 0x77:
-                    return success;
-                case 0x70: case 0xC2: case 0xC4: case 0xC5: case 0xC6:
-                    if (!incrementLength())
-                        return instruction_overflow;
-                default:
-                    break;
-            }
-
-            return analyseModRM(preceding_byte_ptr + 1);
-        }
+        // 62
+        Status analyseEVEX(const BYTE* preceding_byte_ptr);
 
     protected:
         WORD reserved : 2 = 0;
@@ -335,7 +291,7 @@ namespace inst {
   /*3*/	  has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, imm_one_byte, imm_four_bytes, has_mod_rm, has_mod_rm,
   /*4*/	  prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix,
 		  none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none,
-   /*6*/  none, none, prefix, has_mod_rm, prefix, prefix, prefix, prefix, imm_four_bytes, has_mod_rm | imm_four_bytes | imm_two_bytes, imm_one_byte, has_mod_rm | imm_one_byte, none, none, none, none,
+   /*6*/  none, none, prefix | special | has_mod_rm, has_mod_rm, prefix, prefix, prefix, prefix, imm_four_bytes, has_mod_rm | imm_four_bytes | imm_two_bytes, imm_one_byte, has_mod_rm | imm_one_byte, none, none, none, none,
 		  imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte, imm_one_byte,
 		  has_mod_rm | imm_one_byte, has_mod_rm | imm_two_bytes | imm_four_bytes, has_mod_rm | imm_one_byte, has_mod_rm | imm_one_byte, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm, has_mod_rm,
 		  none, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none,

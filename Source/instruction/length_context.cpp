@@ -7,10 +7,10 @@ Context::Status Context::map(const BYTE * const analysis_address) { using enum F
         return no_input;
     if (!setLength(getPreDisposition()))
         return instruction_overflow;
-/*
-    if (analysis_address == reinterpret_cast<void*>(0x7FF9E0924CA0))
+/*   
+    if (analysis_address == reinterpret_cast<void*>(0x7ffc777fa461))
         std::print("");
-*/  
+  */
     switch (results[*analysis_address]) {
         case none:
             if (*analysis_address == 0xCC)
@@ -70,6 +70,9 @@ Context::Status Context::map(const BYTE * const analysis_address) { using enum F
 
         case imm_eight_bytes:
             return increaseLength(SIZE_OF_QWORD) ? success : instruction_overflow;
+
+        case imm_one_byte | imm_two_bytes:
+            return increaseLength(SIZE_OF_WORD + SIZE_OF_BYTE) ? success : instruction_overflow;
 
         case imm_two_bytes | imm_four_bytes | imm_eight_bytes:
             if (shortened)
@@ -140,16 +143,129 @@ Context::Status Context::analyseModRM(const BYTE* const preceding_byte_ptr) { us
 Context::Status Context::analyseAVX(const BYTE * const analysis_address) {
     if (!incrementLength())
         return instruction_overflow;
-    if (!incrementOpcode())
+
+    if (!incrementPrefixCount())
         return prefix_overflow;
+/*
+    if (analysis_address == reinterpret_cast<void*>(0x7ffc777fa382))
+        std::print("");
+        */
+    switch (*analysis_address){
+        case 0xC5: 
+            return analyseLDS(analysis_address + 1);
     
-    if (*analysis_address == 0xC5) 
-        return analyseLDS(analysis_address + 1);
+        case 0xC4:
+            return analyseLES(analysis_address + 1);
     
-    if (*analysis_address == 0xC4)
-        return analyseLES(analysis_address + 1);
+        case 0x62:
+            return analyseEVEX(analysis_address + 1);
+        default:
+            return wrong_input;
+    }
+}
+
+Context::Status Context::analyseLDS(const BYTE* const preceding_byte_ptr) {
+    if (!incrementOpcode())
+        return opcode_overflow;
+
+    if (!incrementLength())
+        return instruction_overflow;
+    if (preceding_byte_ptr == reinterpret_cast<void*>(0x7ffc777fa57b))
+        std::print("");
+
+    switch (preceding_byte_ptr[1]) {
+        case 0x77:
+            return success;
+        
+        case 0x70: case 0x71: case 0x72: case 0x73: case 0xC2: case 0xC4: case 0xC5: case 0xC6:
+            if (!incrementLength())
+                return instruction_overflow;
+            break;
+
+        default:
+            break;
+    }
+    return analyseModRM(preceding_byte_ptr + 1);
+}
+
+
+Context::Status Context::analyseLES(const BYTE* const preceding_byte_ptr) { using namespace AVX;
+    if (!incrementOpcode())
+        return opcode_overflow;
+
+    if (!increaseLength(SIZE_OF_WORD))
+        return instruction_overflow;
+
+    switch (*preceding_byte_ptr & MMMM_MASK) { using enum Maps;
+        case map0x0F38:
+            return analyseModRM(preceding_byte_ptr + 2);
+
+        case map0x0F3A:
+            if (!incrementLength())
+                return instruction_overflow;
+
+            return analyseModRM(preceding_byte_ptr + 2);
+
+        case map0x0F:
+            switch (preceding_byte_ptr[2]) {
+                case 0x70: case 0xC2: case 0xC4: case 0xC5: case 0xC6:
+                    if (!incrementLength())
+                        return instruction_overflow;
+                    break;
+                
+                default:
+                    break;
+            }
+            return analyseModRM(preceding_byte_ptr + 2);
+        
+        case wrong:
+        default:
+            return wrong_input;
+    }
+}
+
+
+Context::Status Context::analyseEVEX(const BYTE* preceding_byte_ptr) {
+    if (!preceding_byte_ptr)
+        return  no_input;
     
-    return wrong_input;
+    if (!incrementPrefixCount() || !incrementPrefixCount() || !incrementPrefixCount())
+        return prefix_overflow;
+
+    /*
+    if (preceding_byte_ptr == reinterpret_cast<void*>(0x7ffc777fa37d))
+        std::print("");
+        */
+    if (!increaseLength(SIZE_OF_WORD + 1))
+        return instruction_overflow;
+
+    switch (*preceding_byte_ptr & AVX::MM_MASK) { using enum AVX::Maps;
+        case map0x0F3A:
+            if (!incrementLength())
+                return instruction_overflow;
+
+            return analyseModRM(preceding_byte_ptr + 3);
+        
+        case map0x0F38:
+            return analyseModRM(preceding_byte_ptr + 3);
+        
+        case map0x0F:
+
+            switch (preceding_byte_ptr[3]) {
+                case 0x70: case 0xC2: case 0xC4: case 0xC5: case 0xC6:
+                    if (!incrementLength())
+                        return instruction_overflow;
+                    break;
+
+                default:
+                    break;
+            }
+            return analyseModRM(preceding_byte_ptr + 3);
+        
+        default:
+            return wrong_input;
+    }
+
 }
 
 Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_ptr) {
@@ -170,6 +286,9 @@ Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_pt
             return success;
 
         case 0x38:
+            idx++;
+            if (!incrementLength())
+                return instruction_overflow;
             break;
         
         case 0x3A:
@@ -247,9 +366,9 @@ Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) { using
 }
 
 Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using namespace mod_rm;
-    /*
-     *if (reinterpret_cast<QWORD>(preceding_byte_ptr) == 0x7ff9e081a69B)
-     *  std::print("");
+   /* 
+     if (reinterpret_cast<QWORD>(preceding_byte_ptr) == 0x7ffc778453cA)
+        std::print("");
      */
     switch (preceding_byte_ptr[1] & MOD_MASK) {
         case MOD11:
@@ -282,7 +401,8 @@ Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using
             if (success != analyseRM4(preceding_byte_ptr, SIZE_OF_BYTE))
                 return instruction_overflow;
             if ((preceding_byte_ptr[1] & RM_MASK) == 5)
-                return increaseLength(SIZE_OF_DWORD) ? success : instruction_overflow;
+                if (!increaseLength(SIZE_OF_DWORD) )
+                    return instruction_overflow;
                 
         return analyseRegBits(preceding_byte_ptr, SIZE_OF_DWORD);
     }

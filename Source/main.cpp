@@ -1,8 +1,8 @@
 #include "main.h"
 #include "tests.h"
 
-constexpr WCHAR MODULE_NAME[]   = L"ntdll.dll";
-constexpr CHAR  FUNCTION_NAME[] = "strrchr";
+constexpr WCHAR MODULE_NAME[]   = L"KERNELBASE.dll";
+constexpr CHAR  FUNCTION_NAME[] = "CreateProcessInternalW";
 // Currently testing CreateProcessInternalW & CreateFileW (which is redirected intentionally through the IAT.)
 int main(int argc, char* argv[]) { using enum FunctionTree::ErrorCode;
     HMODULE hModule = GetModuleHandleW(MODULE_NAME);
@@ -32,9 +32,9 @@ int main(int argc, char* argv[]) { using enum FunctionTree::ErrorCode;
         return 2;
     }
     
-    FunctionTree FuncTree0(reinterpret_cast<void*>(&CreateFileW)),
+    FunctionTree FuncTree0(reinterpret_cast<void*>(0x00007ffc777fa378)),
                  FuncTree1(target_function);
-    
+    /*
     FuncTree1.trace() == success ? FuncTree1.print() : std::println("[x] {:s}'s analysis failed!", FuncTree1.name);
     
     //FuncTree1.print();
@@ -45,15 +45,15 @@ int main(int argc, char* argv[]) { using enum FunctionTree::ErrorCode;
         newFunc.trace() == success ? newFunc.print() : std::println("[x] Analysis of {:s} (Index: {:3d}) Failed!", newFunc.name, i);
         i++;
     }
+    */
     
-    /*
     FuncTree0.trace() == success ? FuncTree0.print() : std::println("[x] {:s}'s analysis failed!", FuncTree0.name);
-    roots = FuncTree0.retrieveNewFunctionsRoots();
+    auto roots = FuncTree0.retrieveNewFunctionsRoots();
     for (DWORD i = 0; auto tree_root : roots) {
         FunctionTree newFunc(tree_root);
         newFunc.trace() == success ? newFunc.print() : std::println("[x] Analysis of {:s} (Index: {:3d}) Failed!", newFunc.name, i);
         i++;
-    }*/
+    }
     
 
     //FuncTree0.trace() == success ? FuncTree0.print() : std::println("[x] Analysis Failed!");

@@ -52,8 +52,8 @@ void RunNtDllSuccessTest() {
     std::map<const BYTE*, DWORD>  all_functions_map{};
     std::vector<FunctionTree>     all_functions_vec{};
     std::vector<DWORD>            exploration_vec(0);
-
-    for (DWORD i = 0; i < image_export_dir_ptr->NumberOfFunctions; i++) { using enum FunctionTree::ErrorCode;
+    DWORD i = 0;
+    for (; i < image_export_dir_ptr->NumberOfFunctions; i++) { using enum FunctionTree::ErrorCode;
         const BYTE* function_address = hModule + reinterpret_cast<const DWORD*>(hModule + image_export_dir_ptr->AddressOfFunctions)[i];
         if (!CheckIfInTextSection(hModule, function_address))
             continue;
@@ -61,8 +61,25 @@ void RunNtDllSuccessTest() {
         FunctionTree current_function(function_address);
         
         current_function.trace() == success ? std::println("[+] {:s}'s analysis reported success", current_function.name) : std::println("[x] {:s}'s analysis failed!", current_function.name);
-        all_functions_vec.emplace_back(current_function);
+        all_functions_vec.emplace_back(std::move(current_function));
         all_functions_map[function_address] = i;
+    }
+    
+    for (auto& function: all_functions_vec) {
+        auto new_roots = function.retrieveNewFunctionsRoots();
+        for (auto& base_of_new_function: new_roots) { using enum FunctionTree::ErrorCode;
+            if (all_functions_map.contains(base_of_new_function))
+                continue;
+
+            if (!CheckIfInTextSection(hModule, base_of_new_function))
+                continue;
+            FunctionTree NewFunction(base_of_new_function);
+            NewFunction.trace() == success ? std::println("[+] {:s}'s analysis reported success", NewFunction.name) : std::println("[x] {:s}'s analysis failed!", NewFunction.name);
+            all_functions_vec.emplace_back(std::move(NewFunction));
+            NewFunction.name = nullptr;
+            all_functions_map[base_of_new_function] = i;
+            i++;
+        }
     }
 }
 
@@ -79,8 +96,8 @@ void RunNtDllVerboseTest() {
     std::map<const BYTE*, DWORD>  all_functions_map{};
     std::vector<FunctionTree>     all_functions_vec{};
     std::vector<DWORD>            exploration_vec(0);
-
-    for (DWORD i = 0; i < image_export_dir_ptr->NumberOfFunctions; i++) {
+    DWORD i = 0;
+    for (; i < image_export_dir_ptr->NumberOfFunctions; i++) {
         using enum FunctionTree::ErrorCode;
         const BYTE* function_address = hModule + reinterpret_cast<const DWORD*>(hModule + image_export_dir_ptr->AddressOfFunctions)[i];
         if (!CheckIfInTextSection(hModule, function_address))
@@ -89,7 +106,24 @@ void RunNtDllVerboseTest() {
         FunctionTree current_function(function_address);
 
         current_function.trace() == success ? current_function.print() : std::println("\n[x] {:s}'s analysis FAILED!!!\n", current_function.name);
-        all_functions_vec.emplace_back(current_function);
+        all_functions_vec.emplace_back(std::move(current_function));
         all_functions_map[function_address] = i;
+    }
+    for (auto& function : all_functions_vec) {
+        auto new_roots = function.retrieveNewFunctionsRoots();
+        for (auto& base_of_new_function : new_roots) {
+            using enum FunctionTree::ErrorCode;
+            if (all_functions_map.contains(base_of_new_function))
+                continue;
+
+            if (!CheckIfInTextSection(hModule, base_of_new_function))
+                continue;
+            FunctionTree NewFunction(base_of_new_function);
+            NewFunction.trace() == success ? NewFunction.print() : std::println("[x] {:s}'s analysis failed!", NewFunction.name);
+            all_functions_vec.emplace_back(std::move(NewFunction));
+            NewFunction.name = nullptr;
+            all_functions_map[base_of_new_function] = i;
+            i++;
+        }
     }
 }
