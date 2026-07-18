@@ -280,9 +280,9 @@ Context::Status Context::analyseSpecialGroup(const BYTE* const preceding_byte_pt
     BYTE idx = 1;
     switch (preceding_byte_ptr[idx]) {
         case 0x05: case 0x06: case 0x07: case 0x08: case 0x09:
-        case 0x30: case 0x31: case 0x32: case 0x34: case 0x35:
-        case 0x77: case 0xA2: case 0x0B: case 0xC8: case 0xC9:
-        case 0xCA: case 0xCB: case 0xCC: case 0xCD: case 0xCF:
+        case 0x30: case 0x31: case 0x32: case 0x33: case 0x34: 
+        case 0x35: case 0x77: case 0xA2: case 0x0B: case 0xC8: 
+        case 0xC9: case 0xCA: case 0xCB: case 0xCC: case 0xCD: case 0xCF:
             return success;
 
         case 0x38:
@@ -315,7 +315,7 @@ Context::Status Context::analyseGroup3(const BYTE* const analysis_address) {
     if (!incrementLength())
         return instruction_overflow;
     
-    if (!incrementPrefixCount())
+    if (!incrementOpcode())
         return opcode_overflow;
     
     switch (*analysis_address) {
@@ -366,10 +366,10 @@ Context::Status Context::analyseF6(const BYTE* const preceding_byte_ptr) { using
 }
 
 Context::Status Context::analyseF7(const BYTE* const preceding_byte_ptr) { using namespace mod_rm;
-   /* 
-     if (reinterpret_cast<QWORD>(preceding_byte_ptr) == 0x7ffc778453cA)
+   
+     if (reinterpret_cast<QWORD>(preceding_byte_ptr) == 0x00007ffeb5a562aC)
         std::print("");
-     */
+     
     switch (preceding_byte_ptr[1] & MOD_MASK) {
         case MOD11:
             return analyseRegBits(preceding_byte_ptr,shortened ? SIZE_OF_WORD : SIZE_OF_DWORD);
@@ -415,6 +415,7 @@ WORD Context::analyseOpcodeType(const BYTE * const analysis_address) { using nam
     if (analysis_address == reinterpret_cast<void*>(0x00007ff9e08a7119))
         std::print("");
 */
+    
     switch (*analysis_address) {
         case RETURN_FAR:
             return ret | _far;

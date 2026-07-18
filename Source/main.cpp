@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) { using enum FunctionTree::ErrorCode;
         return 2;
     }
     
-    FunctionTree FuncTree0(reinterpret_cast<void*>(0x00007ffc777fa378)),
+    FunctionTree FuncTree0(reinterpret_cast<void*>(0x00007ffeb5a561bc)),
                  FuncTree1(target_function);
     /*
     FuncTree1.trace() == success ? FuncTree1.print() : std::println("[x] {:s}'s analysis failed!", FuncTree1.name);

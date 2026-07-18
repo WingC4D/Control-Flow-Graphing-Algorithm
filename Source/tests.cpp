@@ -50,21 +50,41 @@ void RunNtDllSuccessTest() {
         }
     const IMAGE_EXPORT_DIRECTORY* image_export_dir_ptr = GetImageExportDir(hModule);
     std::map<const BYTE*, DWORD>  all_functions_map{};
-    std::vector<FunctionTree>     all_functions_vec{};
-    std::vector<DWORD>            exploration_vec(0);
-    DWORD i = 0;
-    for (; i < image_export_dir_ptr->NumberOfFunctions; i++) { using enum FunctionTree::ErrorCode;
-        const BYTE* function_address = hModule + reinterpret_cast<const DWORD*>(hModule + image_export_dir_ptr->AddressOfFunctions)[i];
+
+    std::vector<const BYTE*>      exploration_vec(0);
+    DWORD i = image_export_dir_ptr->NumberOfFunctions;
+    for (; i != 0 ; i--) { 
+        const BYTE* function_address = hModule + reinterpret_cast<const DWORD*>(hModule + image_export_dir_ptr->AddressOfFunctions)[i - 1];
         if (!CheckIfInTextSection(hModule, function_address))
             continue;
-        
-        FunctionTree current_function(function_address);
-        
-        current_function.trace() == success ? std::println("[+] {:s}'s analysis reported success", current_function.name) : std::println("[x] {:s}'s analysis failed!", current_function.name);
-        all_functions_vec.emplace_back(std::move(current_function));
-        all_functions_map[function_address] = i;
+
+        exploration_vec.emplace_back(function_address);
+        all_functions_map[function_address] = i - 1;
     }
-    
+    i = image_export_dir_ptr->NumberOfFunctions;
+    while (!exploration_vec.empty()) { using enum FunctionTree::ErrorCode;
+        const BYTE* current_function_base = exploration_vec.back();
+        exploration_vec.pop_back();
+
+        FunctionTree CurrFunction(current_function_base);
+        CurrFunction.trace() == success ? CurrFunction.print()/*std::println("[+] {:s}'s analysis reported success", CurrFunction.name)*/ : std::println("[x] {:s}'s analysis failed!", CurrFunction.name);
+
+        auto roots = CurrFunction.retrieveNewFunctionsRoots();
+
+        for (auto base_of_new_func: roots) {
+            if (all_functions_map.contains(base_of_new_func))
+                continue;
+            if (!CheckIfInTextSection(hModule, base_of_new_func))
+                continue;
+            
+            exploration_vec.emplace_back(base_of_new_func);
+            auto new_base = base_of_new_func;
+            all_functions_map[new_base] = i;
+            i++;
+        }
+
+    }
+    /*
     for (auto& function: all_functions_vec) {
         auto new_roots = function.retrieveNewFunctionsRoots();
         for (auto& base_of_new_function: new_roots) { using enum FunctionTree::ErrorCode;
@@ -77,10 +97,8 @@ void RunNtDllSuccessTest() {
             NewFunction.trace() == success ? std::println("[+] {:s}'s analysis reported success", NewFunction.name) : std::println("[x] {:s}'s analysis failed!", NewFunction.name);
             all_functions_vec.emplace_back(std::move(NewFunction));
             NewFunction.name = nullptr;
-            all_functions_map[base_of_new_function] = i;
-            i++;
         }
-    }
+    }*/
 }
 
 
